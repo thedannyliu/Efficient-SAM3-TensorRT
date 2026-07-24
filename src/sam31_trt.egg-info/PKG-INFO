@@ -1,7 +1,0 @@
-Metadata-Version: 2.4
-Name: sam31-trt
-Version: 0.1.0
-Summary: Reproducible SAM 3.1 TensorRT optimization experiments
-Requires-Python: >=3.12
-Requires-Dist: numpy<2,>=1.26
-Requires-Dist: opencv-python-headless
