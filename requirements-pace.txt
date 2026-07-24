@@ -1,6 +1,7 @@
 numpy==1.26.4
 scipy==1.14.1
 cupy-cuda12x==13.6.0
+setuptools==80.9.0
 einops
 psutil
 opencv-python-headless
@@ -12,4 +13,3 @@ onnxscript
 onnxruntime-gpu==1.24.4
 tensorrt==11.1.0.106
 nvidia-modelopt[onnx]==0.45.0
-

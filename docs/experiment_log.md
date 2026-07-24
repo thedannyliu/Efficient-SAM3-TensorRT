@@ -33,8 +33,9 @@
 - `11461877`: FP16 vision-trunk ONNX/TensorRT probe, RTX Pro 6000 Blackwell,
   `embers`, pending.
 - `11461878`: FP32 native smoke, RTX Pro 6000 Blackwell, `embers`, pending.
-- `11461879`: FP16 vision-trunk ONNX/TensorRT probe, A100, `embers`, pending.
-- `11461880`: FP32 native smoke, A100, `embers`, pending.
+- `11461879`: A100 probe failed before model load because ModelOpt upgraded
+  `setuptools` to 83, which removed `pkg_resources` still imported by upstream.
+- `11461880`: A100 baseline hit the same environment failure.
 - `11461885[0-3]`: four FP8 vision block-group sensitivity runs (blocks
   0-7, 8-15, 16-23, 24-31), H200, `embers`, depends on `11461852`.
 - `11461896`: official BF16 native reference, H200, `embers`, pending.
@@ -44,6 +45,10 @@ The first submission attempt for the 32 individual vision-block FP8 array was
 rejected by PACE with `QOSMaxSubmitJobPerUserLimit`. The implementation is in
 `jobs/pace_vision_blocks.sbatch`; resubmit after queued `embers` work frees
 submission capacity. No `inferno` jobs were used.
+
+Fix: pin `setuptools==80.9.0`, which both retains `pkg_resources` and satisfies
+ModelOpt 0.45's `setuptools>=80` requirement. Local upstream import and
+`pip check` pass after the pin.
 
 End-to-end candidates use `TensorRTVisionTrunk` to replace only
 `detector.backbone.vision_backbone.trunk` inside the official predictor. The
