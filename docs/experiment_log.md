@@ -44,3 +44,9 @@ The first submission attempt for the 32 individual vision-block FP8 array was
 rejected by PACE with `QOSMaxSubmitJobPerUserLimit`. The implementation is in
 `jobs/pace_vision_blocks.sbatch`; resubmit after queued `embers` work frees
 submission capacity. No `inferno` jobs were used.
+
+End-to-end candidates use `TensorRTVisionTrunk` to replace only
+`detector.backbone.vision_backbone.trunk` inside the official predictor. The
+TensorRT output remains a CUDA tensor and feeds the three original SAM3.1 necks
+without a host copy. This is the path used for final mIoU retention; standalone
+vision feature cosine is only a fast sensitivity filter.

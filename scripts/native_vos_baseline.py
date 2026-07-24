@@ -33,6 +33,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-frames", type=int, default=16)
     parser.add_argument("--compile", action="store_true")
     parser.add_argument("--use-fa3", action="store_true")
+    parser.add_argument("--vision-engine", type=Path)
     return parser.parse_args()
 
 
@@ -181,6 +182,12 @@ def main() -> None:
         use_rope_real=True,
         async_loading_frames=False,
     )
+    if args.vision_engine:
+        from sam31_trt.runtime import TensorRTVisionTrunk
+
+        predictor.model.detector.backbone.vision_backbone.trunk = (
+            TensorRTVisionTrunk(args.vision_engine)
+        )
     if args.precision != "official_bf16" and hasattr(predictor, "bf16_context"):
         predictor.bf16_context.__exit__(None, None, None)
     torch.cuda.reset_peak_memory_stats()
@@ -194,7 +201,8 @@ def main() -> None:
     ious = [row["mean_iou"] for row in videos if row["mean_iou"] is not None]
     report = {
         "schema_version": 1,
-        "backend": "pytorch-native-sam3.1",
+        "backend": "tensorrt-vision-sam3.1" if args.vision_engine else "pytorch-native-sam3.1",
+        "vision_engine": str(args.vision_engine) if args.vision_engine else None,
         "precision": args.precision,
         "prompt_precision": "bf16",
         "compile": args.compile,
