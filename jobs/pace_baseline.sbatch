@@ -4,7 +4,7 @@
 #SBATCH --account=gts-agarg35
 #SBATCH --qos=embers
 #SBATCH --gres=gpu:h100:1
-#SBATCH --cpus-per-task=12
+#SBATCH --cpus-per-task=8
 #SBATCH --mem=128G
 #SBATCH --time=02:00:00
 #SBATCH --output=logs/%x-%j.out
