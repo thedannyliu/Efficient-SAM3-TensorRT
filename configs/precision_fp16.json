@@ -1,0 +1,7 @@
+{
+  "name": "tensorrt_fp16_baseline",
+  "default_precision": "fp16",
+  "rules": [],
+  "minimum_relative_miou": 0.90
+}
+

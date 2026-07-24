@@ -1,0 +1,7 @@
+{
+  "name": "pytorch_fp32_reference",
+  "default_precision": "fp32",
+  "rules": [],
+  "minimum_relative_miou": 0.90
+}
+

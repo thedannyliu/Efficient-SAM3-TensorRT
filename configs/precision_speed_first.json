@@ -1,0 +1,13 @@
+{
+  "name": "speed_first_seed",
+  "default_precision": "fp8",
+  "rules": [
+    {"pattern": "*.layer_norm*", "precision": "fp16"},
+    {"pattern": "*.softmax*", "precision": "fp16"},
+    {"pattern": "*.mask_decoder*", "precision": "fp16"},
+    {"pattern": "*.iou_prediction_head*", "precision": "fp16"},
+    {"pattern": "*.output*", "precision": "fp16"}
+  ],
+  "minimum_relative_miou": 0.90
+}
+

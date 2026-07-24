@@ -1,0 +1,12 @@
+.venv/
+external/
+checkpoints/
+results/
+logs/
+*.onnx
+*.engine
+*.plan
+*.jsonl
+__pycache__/
+.pytest_cache/
+
