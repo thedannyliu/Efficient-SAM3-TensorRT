@@ -33,6 +33,7 @@ fi
 nvidia-smi
 python scripts/native_vos_baseline.py \
   --manifest "${MANIFEST:?set MANIFEST to the SA-V JSONL}" \
+  --data-root "${DATA_ROOT:?set DATA_ROOT to the benchmark repository}" \
   --checkpoint "${CHECKPOINT:-checkpoints/sam3.1_multiplex.pt}" \
   --sam3-repo external/sam3 \
   --precision "${precision}" \

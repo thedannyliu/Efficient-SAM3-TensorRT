@@ -34,6 +34,7 @@ python -m pip install onnx onnxscript opencv-python-headless \
 
 ```bash
 MANIFEST=/storage/project/r-agarg35-0/eliu354/projects/efficientsam3-benchmark/data/manifests/sav_val_fixed3.jsonl \
+DATA_ROOT=/storage/project/r-agarg35-0/eliu354/projects/efficientsam3-benchmark \
 sbatch jobs/pace_baseline.sbatch
 ```
 

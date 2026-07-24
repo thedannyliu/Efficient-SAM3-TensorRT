@@ -20,6 +20,7 @@ from sam31_trt.metrics import binary_iou
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--manifest", type=Path, required=True)
+    parser.add_argument("--data-root", type=Path, required=True)
     parser.add_argument("--checkpoint", type=Path, required=True)
     parser.add_argument("--sam3-repo", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
@@ -161,6 +162,11 @@ def main() -> None:
         for line in args.manifest.read_text(encoding="utf-8").splitlines()
         if line.strip()
     ][: args.max_videos]
+    for item in rows:
+        for field in ("frames_dir", "annotations_dir"):
+            path = Path(item[field])
+            if not path.is_absolute():
+                item[field] = str((args.data_root / path).resolve())
     predictor = build_sam3_predictor(
         checkpoint_path=str(args.checkpoint.resolve()),
         version="sam3.1",
@@ -204,4 +210,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
