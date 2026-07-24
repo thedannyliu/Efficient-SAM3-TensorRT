@@ -2,10 +2,12 @@
 
 ## Protocol
 
-- Accuracy reference: native SAM 3.1 FP32 with one positive point on frame 0.
+- Accuracy reference: native SAM 3.1 official BF16 runtime with one positive
+  point on frame 0. The official predictor enters a persistent BF16 autocast
+  context and also hard-codes BF16 around `add_prompt`.
 - Task metric: mean binary mask IoU on annotated SA-V frames.
 - Deployment fidelity: mean binary IoU between TensorRT and PyTorch masks.
-- Acceptance: candidate task mIoU / FP32 task mIoU >= 0.90.
+- Acceptance: candidate task mIoU / official BF16 task mIoU >= 0.90.
 - Timing: synchronize CUDA immediately before and after each propagation step.
 - Generated artifacts stay under ignored `results/`, `logs/`, and `checkpoints/`.
 
@@ -33,3 +35,5 @@
 - `11461878`: FP32 native smoke, RTX Pro 6000 Blackwell, `embers`, pending.
 - `11461879`: FP16 vision-trunk ONNX/TensorRT probe, A100, `embers`, pending.
 - `11461880`: FP32 native smoke, A100, `embers`, pending.
+- `11461885[0-3]`: four FP8 vision block-group sensitivity runs (blocks
+  0-7, 8-15, 16-23, 24-31), H200, `embers`, depends on `11461852`.

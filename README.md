@@ -2,7 +2,7 @@
 
 This repository measures and optimizes Meta's native SAM 3.1 Object Multiplex
 pipeline before deployment to Jetson Thor. The acceptance threshold is a task
-mIoU retention of at least 90% relative to the FP32 PyTorch reference.
+mIoU retention of at least 90% relative to the official BF16 PyTorch runtime.
 
 Generated checkpoints, ONNX graphs, TensorRT engines, logs, and benchmark
 results are intentionally ignored.

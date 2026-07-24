@@ -1,7 +1,6 @@
 {
-  "name": "pytorch_fp32_reference",
-  "default_precision": "fp32",
+  "name": "pytorch_official_bf16_reference",
+  "default_precision": "bf16",
   "rules": [],
   "minimum_relative_miou": 0.90
 }
-

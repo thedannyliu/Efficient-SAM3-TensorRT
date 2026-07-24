@@ -18,7 +18,7 @@ source .venv/bin/activate
 export PYTHONPATH="${PWD}/src:${PYTHONPATH:-}"
 export PYTHONUNBUFFERED=1
 
-precision="${PRECISION:-fp32}"
+precision="${PRECISION:-official_bf16}"
 output="results/${SLURM_JOB_ID}/native_${precision}.json"
 mkdir -p "$(dirname "${output}")" logs
 

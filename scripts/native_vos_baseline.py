@@ -24,7 +24,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--checkpoint", type=Path, required=True)
     parser.add_argument("--sam3-repo", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--precision", choices=("fp32", "fp16", "bf16"), default="fp32")
+    parser.add_argument(
+        "--precision",
+        choices=("official_bf16", "fp32", "fp16", "bf16"),
+        default="official_bf16",
+    )
     parser.add_argument("--max-videos", type=int, default=1)
     parser.add_argument("--max-frames", type=int, default=16)
     parser.add_argument("--compile", action="store_true")
@@ -176,6 +180,8 @@ def main() -> None:
         use_rope_real=True,
         async_loading_frames=False,
     )
+    if args.precision != "official_bf16" and hasattr(predictor, "bf16_context"):
+        predictor.bf16_context.__exit__(None, None, None)
     torch.cuda.reset_peak_memory_stats()
     videos = [
         profile_video(predictor, item, args.precision, args.max_frames) for item in rows
@@ -189,6 +195,7 @@ def main() -> None:
         "schema_version": 1,
         "backend": "pytorch-native-sam3.1",
         "precision": args.precision,
+        "prompt_precision": "bf16",
         "compile": args.compile,
         "use_fa3": args.use_fa3,
         "checkpoint": str(args.checkpoint),
