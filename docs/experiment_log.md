@@ -50,3 +50,7 @@ End-to-end candidates use `TensorRTVisionTrunk` to replace only
 TensorRT output remains a CUDA tensor and feeds the three original SAM3.1 necks
 without a host copy. This is the path used for final mIoU retention; standalone
 vision feature cosine is only a fast sensitivity filter.
+
+- `11461938`: FP16 TensorRT vision, end-to-end SA-V mIoU, depends on `11461852`.
+- `11461939`: FP8 TensorRT vision, end-to-end SA-V mIoU, depends on `11461875`.
+- `11461940`: INT8 TensorRT vision, end-to-end SA-V mIoU, depends on `11461876`.
