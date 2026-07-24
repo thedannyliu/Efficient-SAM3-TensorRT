@@ -4,8 +4,10 @@ checkpoints/
 results/
 logs/
 *.onnx
+*.onnx.data
 *.engine
 *.plan
+*.pt
 *.jsonl
 __pycache__/
 .pytest_cache/

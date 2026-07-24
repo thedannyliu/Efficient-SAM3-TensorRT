@@ -21,4 +21,5 @@
 
 ## Runs
 
-No completed PACE runs yet.
+- `11461819`: FP32 native smoke, H100, `embers`, pending.
+- `11461821`: FP32 native smoke, H200, `embers`, pending.
