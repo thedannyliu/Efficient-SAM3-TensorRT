@@ -26,3 +26,10 @@
 - `11461852`: FP16 vision-trunk ONNX/TensorRT probe, H200, `embers`, pending.
 - `11461854`: FP32 native smoke, L40S, `embers`, pending.
 - `11461855`: FP16 vision-trunk ONNX/TensorRT probe, L40S, `embers`, pending.
+- `11461875`: full vision-trunk FP8 PTQ, H200, `embers`, depends on `11461852`.
+- `11461876`: full vision-trunk INT8 PTQ, H200, `embers`, depends on `11461852`.
+- `11461877`: FP16 vision-trunk ONNX/TensorRT probe, RTX Pro 6000 Blackwell,
+  `embers`, pending.
+- `11461878`: FP32 native smoke, RTX Pro 6000 Blackwell, `embers`, pending.
+- `11461879`: FP16 vision-trunk ONNX/TensorRT probe, A100, `embers`, pending.
+- `11461880`: FP32 native smoke, A100, `embers`, pending.
