@@ -11,6 +11,7 @@ results are intentionally ignored.
 
 - Meta SAM 3 source: commit `46957e47805eaa273f4aa7bbbd25a88bca9108ce`
 - Checkpoint: `facebook/sam3.1/sam3.1_multiplex.pt`
+  (`sha256:0567debeec80ba4ac6369540c6c248025283cb3ff2b92827509e57e2b3541cb6`)
 - First accuracy smoke: the fixed SA-V point-prompt subset owned by
   `efficientsam3-benchmark`
 - PACE QOS: `embers`
@@ -38,3 +39,6 @@ sbatch jobs/pace_baseline.sbatch
 
 Every precision candidate must report absolute task mIoU, relative mIoU
 retention, model latency, effective FPS, GPU type, and peak CUDA memory.
+
+TensorRT engines must be rebuilt on the deployment GPU. PACE engines are
+benchmark artifacts and must not be copied to Jetson Thor.

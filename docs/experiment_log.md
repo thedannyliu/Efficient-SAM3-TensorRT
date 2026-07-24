@@ -39,3 +39,8 @@
   0-7, 8-15, 16-23, 24-31), H200, `embers`, depends on `11461852`.
 - `11461896`: official BF16 native reference, H200, `embers`, pending.
 - `11461897`: official BF16 native reference, L40S, `embers`, pending.
+
+The first submission attempt for the 32 individual vision-block FP8 array was
+rejected by PACE with `QOSMaxSubmitJobPerUserLimit`. The implementation is in
+`jobs/pace_vision_blocks.sbatch`; resubmit after queued `embers` work frees
+submission capacity. No `inferno` jobs were used.

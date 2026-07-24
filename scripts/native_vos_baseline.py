@@ -110,6 +110,7 @@ def profile_video(
             {
                 "type": "propagate_in_video",
                 "session_id": session_id,
+                "propagation_direction": "forward",
                 "start_frame_index": int(item["prompt_frame_index"]),
                 "max_frame_num_to_track": max_frames,
             }
