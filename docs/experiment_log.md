@@ -37,3 +37,5 @@
 - `11461880`: FP32 native smoke, A100, `embers`, pending.
 - `11461885[0-3]`: four FP8 vision block-group sensitivity runs (blocks
   0-7, 8-15, 16-23, 24-31), H200, `embers`, depends on `11461852`.
+- `11461896`: official BF16 native reference, H200, `embers`, pending.
+- `11461897`: official BF16 native reference, L40S, `embers`, pending.
