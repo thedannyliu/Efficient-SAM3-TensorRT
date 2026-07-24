@@ -23,3 +23,6 @@
 
 - `11461819`: FP32 native smoke, H100, `embers`, pending.
 - `11461821`: FP32 native smoke, H200, `embers`, pending.
+- `11461852`: FP16 vision-trunk ONNX/TensorRT probe, H200, `embers`, pending.
+- `11461854`: FP32 native smoke, L40S, `embers`, pending.
+- `11461855`: FP16 vision-trunk ONNX/TensorRT probe, L40S, `embers`, pending.

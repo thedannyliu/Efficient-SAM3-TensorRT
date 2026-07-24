@@ -25,9 +25,7 @@ python -m pip install -U pip
 python -m pip install torch==2.10.0 torchvision \
   --index-url https://download.pytorch.org/whl/cu128
 python -m pip install -e external/sam3 -e .
-python -m pip install onnx onnxscript opencv-python-headless \
-  pycocotools pandas pytest tensorrt==11.1.0.106 \
-  einops psutil
+python -m pip install -r requirements-pace.txt
 ```
 
 ## Baseline submission
