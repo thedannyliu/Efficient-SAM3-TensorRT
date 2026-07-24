@@ -53,6 +53,14 @@ ModelOpt 0.45's `setuptools>=80` requirement. Local upstream import and
 - `11461969`: A100 FP16 vision-trunk retry after the environment fix, pending.
 - `11461970`: A100 official BF16 baseline retry after the environment fix,
   pending.
+- `11461976[0-7]`: individual FP8 sensitivity for vision blocks 0 through 7,
+  H200, `embers`, depends on `11461852`. The remaining blocks will be submitted
+  in bounded batches as QOS capacity becomes available.
+- `11461982[8-15]`: individual FP8 sensitivity for vision blocks 8 through 15,
+  H200, `embers`, depends on `11461852`.
+
+The blocks 16-23 batch was rejected by `QOSMaxSubmitJobPerUserLimit`; no paid
+QOS fallback was used.
 
 End-to-end candidates use `TensorRTVisionTrunk` to replace only
 `detector.backbone.vision_backbone.trunk` inside the official predictor. The
