@@ -50,6 +50,10 @@ Fix: pin `setuptools==80.9.0`, which both retains `pkg_resources` and satisfies
 ModelOpt 0.45's `setuptools>=80` requirement. Local upstream import and
 `pip check` pass after the pin.
 
+- `11461969`: A100 FP16 vision-trunk retry after the environment fix, pending.
+- `11461970`: A100 official BF16 baseline retry after the environment fix,
+  pending.
+
 End-to-end candidates use `TensorRTVisionTrunk` to replace only
 `detector.backbone.vision_backbone.trunk` inside the official predictor. The
 TensorRT output remains a CUDA tensor and feeds the three original SAM3.1 necks
