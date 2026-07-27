@@ -71,3 +71,38 @@ vision feature cosine is only a fast sensitivity filter.
 - `11461938`: FP16 TensorRT vision, end-to-end SA-V mIoU, depends on `11461852`.
 - `11461939`: FP8 TensorRT vision, end-to-end SA-V mIoU, depends on `11461875`.
 - `11461940`: INT8 TensorRT vision, end-to-end SA-V mIoU, depends on `11461876`.
+
+## 2026-07-27 compatibility iteration
+
+All earlier jobs that reached execution failed before producing a benchmark
+report. Their pending dependent jobs (`11461875`, `11461876`, `11461885`,
+`11461938`-`11461940`, `11461976`, and `11461982`) were cancelled because
+their prerequisites could no longer succeed.
+
+Three upstream compatibility issues were isolated and fixed:
+
+1. The SAM 3.1 multiplex `init_state` method does not accept
+   `offload_state_to_cpu`, although the common predictor forwards it. The
+   benchmark now filters session arguments against the actual method signature.
+2. The checkpoint stores one complex RoPE buffer per vision block, while the
+   ONNX-compatible real-valued path additionally derives real and imaginary
+   buffers. Only those 64 deterministic buffers may be absent during load;
+   any learned-weight mismatch still fails.
+3. The upstream fused MLP always computes its first projection and GELU in
+   BF16. The isolated ONNX export process replaces that fusion with the
+   mathematically equivalent standard linear-plus-GELU path so FP32 reference
+   and FP16 export dtypes remain consistent.
+
+Validation after the fixes:
+
+- `11514301`, H200 official BF16 smoke, completed. One SA-V video, one object,
+  nine propagated frames and three annotated frames: 74.880 ms/frame,
+  13.355 effective FPS, 0.22144 mIoU, and 8126.9 MiB peak CUDA allocation.
+  This is a functional and relative-accuracy smoke, not the final dataset
+  estimate.
+- `11514248` reached the vision forward and exposed issue 3.
+- `11514300` successfully generated the 897 MB external-data FP16 ONNX graph,
+  then exposed that the official trunk returns a single-element feature list.
+  The TensorRT runtime and reference writer now preserve that exact contract.
+- `11514348`, corrected FP16 ONNX/TensorRT vision-trunk smoke on H200, submitted
+  with `embers`.
