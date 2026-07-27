@@ -28,6 +28,9 @@ fi
 if [[ "${FP32_SOFTMAX:-0}" == "1" ]]; then
   extra_args+=(--fp32-softmax)
 fi
+if [[ -n "${FP32_BLOCKS:-}" ]]; then
+  extra_args+=(--fp32-blocks "${FP32_BLOCKS}")
+fi
 
 nvidia-smi
 python scripts/export_vision_trunk.py \
@@ -37,6 +40,10 @@ python scripts/export_vision_trunk.py \
   --onnx "${run_dir}/vision_trunk.onnx" \
   --reference "${run_dir}/reference.pt" \
   "${extra_args[@]}"
+
+if [[ "${EXPORT_ONLY:-0}" == "1" ]]; then
+  exit 0
+fi
 
 python scripts/build_benchmark_engine.py \
   --onnx "${run_dir}/vision_trunk.onnx" \

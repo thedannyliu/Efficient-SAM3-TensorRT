@@ -27,6 +27,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--fp32-layernorm", action="store_true")
     parser.add_argument("--fp32-softmax", action="store_true")
+    parser.add_argument("--fp32-blocks", default="")
     return parser.parse_args()
 
 
@@ -54,6 +55,24 @@ def fp32_softmax_sdpa(query, key, value):
     scores = torch.matmul(query, key.transpose(-2, -1)) * query.shape[-1] ** -0.5
     probabilities = torch.softmax(scores.float(), dim=-1).to(query.dtype)
     return torch.matmul(probabilities, value)
+
+
+class FP32Block(torch.nn.Module):
+    def __init__(self, block: torch.nn.Module) -> None:
+        super().__init__()
+        self.block = block.float()
+
+    def forward(self, value):
+        return self.block(value.float()).to(value.dtype)
+
+
+def parse_fp32_blocks(value: str) -> list[int]:
+    if not value:
+        return []
+    blocks = sorted({int(item) for item in value.split(",")})
+    if blocks[0] < 0 or blocks[-1] >= 32:
+        raise ValueError(f"FP32 block index outside [0, 31]: {blocks}")
+    return blocks
 
 
 def main() -> None:
@@ -96,6 +115,9 @@ def main() -> None:
         "bf16": torch.bfloat16,
     }[args.precision]
     model = model.to(dtype=dtype)
+    fp32_blocks = parse_fp32_blocks(args.fp32_blocks)
+    for block_index in fp32_blocks:
+        model.blocks[block_index] = FP32Block(model.blocks[block_index])
     model_input = input_fp32.to(dtype=dtype)
     with torch.inference_mode():
         native_output = model(model_input)[0]
@@ -130,6 +152,7 @@ def main() -> None:
         "derived_rope_buffers": len(derived_rope_buffers),
         "fp32_layer_norms": fp32_layer_norms,
         "fp32_softmax": args.fp32_softmax,
+        "fp32_blocks": fp32_blocks,
         "onnx": str(args.onnx),
         "reference": str(args.reference),
     }

@@ -3,8 +3,10 @@ import unittest
 import torch
 
 from scripts.export_vision_trunk import (
+    FP32Block,
     configure_fp32_layer_norms,
     fp32_softmax_sdpa,
+    parse_fp32_blocks,
 )
 
 
@@ -40,6 +42,18 @@ class ExportPrecisionTest(unittest.TestCase):
 
         self.assertEqual(output.dtype, torch.float16)
         torch.testing.assert_close(output, expected, atol=2e-3, rtol=2e-3)
+
+    def test_fp32_block_preserves_external_dtype(self) -> None:
+        wrapped = FP32Block(torch.nn.Linear(4, 4).half())
+        output = wrapped(torch.ones(2, 4, dtype=torch.float16))
+
+        self.assertEqual(output.dtype, torch.float16)
+        self.assertEqual(wrapped.block.weight.dtype, torch.float32)
+
+    def test_fp32_block_list(self) -> None:
+        self.assertEqual(parse_fp32_blocks("7,0,7"), [0, 7])
+        with self.assertRaises(ValueError):
+            parse_fp32_blocks("32")
 
 
 if __name__ == "__main__":
