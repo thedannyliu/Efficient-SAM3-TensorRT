@@ -78,7 +78,7 @@ def main() -> None:
     onnx_ms = (perf_counter() - start) * 1000
 
     engine = TensorRTVisionTrunk(args.engine)
-    image_cuda = reference["input"].cuda()
+    image_cuda = torch.from_numpy(image).cuda()
     torch.cuda.synchronize()
     start = perf_counter()
     trt_output = engine(image_cuda)[0]
