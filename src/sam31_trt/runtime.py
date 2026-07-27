@@ -91,10 +91,15 @@ class LimitedCallsVisionTrunk(torch.nn.Module):
         self.native = native
         self.call_limit = call_limit
         self.calls = 0
+        self.session_calls = 0
         self.channel_list = native.channel_list
+
+    def reset_call_window(self) -> None:
+        self.session_calls = 0
 
     def forward(self, tensor_list: Any):
         self.calls += 1
-        if self.calls <= self.call_limit:
+        self.session_calls += 1
+        if self.session_calls <= self.call_limit:
             return self.accelerated(tensor_list)
         return self.native(tensor_list)

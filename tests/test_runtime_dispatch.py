@@ -22,7 +22,9 @@ class RuntimeDispatchTest(unittest.TestCase):
 
         self.assertEqual(trunk(None), [1])
         self.assertEqual(trunk(None), [2])
-        self.assertEqual(trunk.calls, 2)
+        trunk.reset_call_window()
+        self.assertEqual(trunk(None), [1])
+        self.assertEqual(trunk.calls, 3)
 
     def test_call_limit_must_be_positive(self) -> None:
         with self.assertRaises(ValueError):

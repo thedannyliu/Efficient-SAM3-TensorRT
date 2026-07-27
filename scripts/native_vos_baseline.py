@@ -106,6 +106,9 @@ def profile_video(
     max_frames: int,
 ) -> dict[str, Any]:
     frame_dir = Path(item["frames_dir"]).resolve()
+    vision_trunk = predictor.model.detector.backbone.vision_backbone.trunk
+    if hasattr(vision_trunk, "reset_call_window"):
+        vision_trunk.reset_call_window()
     session_id = start_session(predictor, frame_dir)
     object_id = 1
     point = torch.tensor(
