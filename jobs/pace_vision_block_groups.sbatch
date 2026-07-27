@@ -23,8 +23,10 @@ group="${SLURM_ARRAY_TASK_ID}"
 start=$((group * 8))
 end=$((start + 7))
 alternatives="$(seq -s '|' "${start}" "${end}")"
-scope_regex="blocks\\.(${alternatives})\\."
-run_dir="results/${SLURM_ARRAY_JOB_ID}_${SLURM_ARRAY_TASK_ID}/blocks_${start}_${end}_fp8"
+component="${COMPONENT_SCOPE:-}"
+scope_regex="blocks\\.(${alternatives})\\.${component}"
+component_suffix="${component:+_${component}}"
+run_dir="results/${SLURM_ARRAY_JOB_ID}_${SLURM_ARRAY_TASK_ID}/blocks_${start}_${end}${component_suffix}_fp8"
 mkdir -p "${run_dir}" logs
 
 nvidia-smi

@@ -118,7 +118,12 @@ def main() -> None:
     if calibration_dtype is None:
         raise RuntimeError(f"unsupported calibration input type: {input_type}")
     expressions = [re.compile(pattern) for pattern in args.scope_regex]
-    op_types = set(args.op_type or ("Conv", "MatMul", "Gemm"))
+    default_op_types = ("MatMul", "Gemm") if args.mode == "fp8" else (
+        "Conv",
+        "MatMul",
+        "Gemm",
+    )
+    op_types = set(args.op_type or default_op_types)
     selected = []
     scopes = {}
     for node in model.graph.node:
