@@ -28,6 +28,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--reference", type=Path, required=True)
     parser.add_argument("--report", type=Path, required=True)
     parser.add_argument("--workspace-gib", type=int, default=64)
+    parser.add_argument(
+        "--builder-optimization-level", type=int, choices=range(6), default=5
+    )
+    parser.add_argument("--max-aux-streams", type=int)
     parser.add_argument("--warmup", type=int, default=20)
     parser.add_argument("--iterations", type=int, default=100)
     return parser.parse_args()
@@ -51,7 +55,9 @@ def main() -> None:
         errors = "\n".join(str(parser.get_error(i)) for i in range(parser.num_errors))
         raise RuntimeError(f"ONNX parse failed:\n{errors}")
     config = builder.create_builder_config()
-    config.builder_optimization_level = 5
+    config.builder_optimization_level = args.builder_optimization_level
+    if args.max_aux_streams is not None:
+        config.max_aux_streams = args.max_aux_streams
     config.set_memory_pool_limit(
         trt.MemoryPoolType.WORKSPACE, args.workspace_gib * 1024**3
     )
@@ -107,6 +113,8 @@ def main() -> None:
         "engine_bytes": args.engine.stat().st_size,
         "gpu": torch.cuda.get_device_name(),
         "tensorrt_version": trt.__version__,
+        "builder_optimization_level": args.builder_optimization_level,
+        "max_aux_streams": args.max_aux_streams,
         "mean_latency_ms": mean(samples),
         "p50_latency_ms": float(np.percentile(samples, 50)),
         "p95_latency_ms": float(np.percentile(samples, 95)),
@@ -126,4 +134,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
