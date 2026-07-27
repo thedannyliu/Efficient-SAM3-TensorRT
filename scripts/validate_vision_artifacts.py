@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from time import perf_counter
 
+import cv2
 import numpy as np
 import onnxruntime as ort
 import torch
@@ -19,6 +20,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--engine", type=Path, required=True)
     parser.add_argument("--reference", type=Path, required=True)
     parser.add_argument("--report", type=Path, required=True)
+    parser.add_argument("--image", type=Path)
     return parser.parse_args()
 
 
@@ -46,11 +48,26 @@ def statistics(value: np.ndarray) -> dict[str, float]:
     }
 
 
+def load_normalized_image(path: Path) -> np.ndarray:
+    image = cv2.imread(str(path), cv2.IMREAD_COLOR)
+    if image is None:
+        raise RuntimeError(f"failed to read image: {path}")
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    image = cv2.resize(image, (1008, 1008), interpolation=cv2.INTER_LINEAR)
+    image = image.astype(np.float32) / 255.0
+    image = (image - 0.5) / 0.5
+    return image.transpose(2, 0, 1)[None].astype(np.float16)
+
+
 def main() -> None:
     args = parse_args()
     reference = torch.load(args.reference, map_location="cpu", weights_only=True)
-    image = reference["input"].numpy()
-    native = reference["native_output"].numpy()
+    image = (
+        load_normalized_image(args.image)
+        if args.image
+        else reference["input"].numpy()
+    )
+    native = None if args.image else reference["native_output"].numpy()
 
     session = ort.InferenceSession(
         str(args.onnx),
@@ -73,11 +90,13 @@ def main() -> None:
         "onnx_providers": session.get_providers(),
         "onnx_latency_ms_first": onnx_ms,
         "tensorrt_latency_ms_first": trt_ms,
-        "native_statistics": statistics(native),
+        "input_kind": "real_image" if args.image else "random_stress",
+        "image": str(args.image) if args.image else None,
+        "native_statistics": None if native is None else statistics(native),
         "onnx_statistics": statistics(onnx_output),
         "tensorrt_statistics": statistics(trt_output),
-        "onnx_vs_native": metrics(onnx_output, native),
-        "tensorrt_vs_native": metrics(trt_output, native),
+        "onnx_vs_native": None if native is None else metrics(onnx_output, native),
+        "tensorrt_vs_native": None if native is None else metrics(trt_output, native),
         "tensorrt_vs_onnx": metrics(trt_output, onnx_output),
     }
     args.report.parent.mkdir(parents=True, exist_ok=True)

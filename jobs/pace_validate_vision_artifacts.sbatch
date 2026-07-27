@@ -20,9 +20,15 @@ export PYTHONUNBUFFERED=1
 source_dir="${SOURCE_DIR:?set SOURCE_DIR to a vision-trunk result directory}"
 mkdir -p logs
 
+extra_args=()
+if [[ -n "${IMAGE:-}" ]]; then
+  extra_args+=(--image "${IMAGE}")
+fi
+
 nvidia-smi
 python scripts/validate_vision_artifacts.py \
   --onnx "${source_dir}/vision_trunk.onnx" \
   --engine "${source_dir}/vision_trunk.engine" \
   --reference "${source_dir}/reference.pt" \
-  --report "${source_dir}/artifact_validation.json"
+  --report "${REPORT:-${source_dir}/artifact_validation.json}" \
+  "${extra_args[@]}"
