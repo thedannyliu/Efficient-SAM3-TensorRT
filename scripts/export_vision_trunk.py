@@ -24,6 +24,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--reference", type=Path, required=True)
     parser.add_argument("--precision", choices=("fp32", "fp16"), default="fp16")
     parser.add_argument("--fp32-layernorm", action="store_true")
+    parser.add_argument("--fp32-softmax", action="store_true")
     return parser.parse_args()
 
 
@@ -47,6 +48,12 @@ def configure_fp32_layer_norms(model: torch.nn.Module) -> int:
     return count
 
 
+def fp32_softmax_sdpa(query, key, value):
+    scores = torch.matmul(query, key.transpose(-2, -1)) * query.shape[-1] ** -0.5
+    probabilities = torch.softmax(scores.float(), dim=-1).to(query.dtype)
+    return torch.matmul(probabilities, value)
+
+
 def main() -> None:
     args = parse_args()
     sys.path.insert(0, str(args.sam3_repo.resolve()))
@@ -60,6 +67,8 @@ def main() -> None:
         return activation()(linear(value))
 
     vitdet.addmm_act = export_addmm_act
+    if args.fp32_softmax:
+        vitdet.F.scaled_dot_product_attention = fp32_softmax_sdpa
 
     checkpoint = torch.load(
         args.checkpoint, map_location="cpu", mmap=True, weights_only=True
@@ -114,6 +123,7 @@ def main() -> None:
         "checkpoint_keys": len(state),
         "derived_rope_buffers": len(derived_rope_buffers),
         "fp32_layer_norms": fp32_layer_norms,
+        "fp32_softmax": args.fp32_softmax,
         "onnx": str(args.onnx),
         "reference": str(args.reference),
     }

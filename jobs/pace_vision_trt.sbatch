@@ -25,6 +25,9 @@ extra_args=()
 if [[ "${FP32_LAYERNORM:-0}" == "1" ]]; then
   extra_args+=(--fp32-layernorm)
 fi
+if [[ "${FP32_SOFTMAX:-0}" == "1" ]]; then
+  extra_args+=(--fp32-softmax)
+fi
 
 nvidia-smi
 python scripts/export_vision_trunk.py \

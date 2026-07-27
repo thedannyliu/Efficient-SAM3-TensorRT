@@ -2,7 +2,10 @@ import unittest
 
 import torch
 
-from scripts.export_vision_trunk import configure_fp32_layer_norms
+from scripts.export_vision_trunk import (
+    configure_fp32_layer_norms,
+    fp32_softmax_sdpa,
+)
 
 
 class ExportPrecisionTest(unittest.TestCase):
@@ -23,6 +26,20 @@ class ExportPrecisionTest(unittest.TestCase):
         self.assertEqual(count, 1)
         self.assertEqual(output.dtype, torch.float16)
         torch.testing.assert_close(output, expected)
+
+    def test_attention_uses_fp32_softmax_and_preserves_dtype(self) -> None:
+        torch.manual_seed(7)
+        query = torch.randn(1, 2, 8, 4, dtype=torch.float16)
+        key = torch.randn(1, 2, 8, 4, dtype=torch.float16)
+        value = torch.randn(1, 2, 8, 4, dtype=torch.float16)
+
+        output = fp32_softmax_sdpa(query, key, value)
+        expected = torch.nn.functional.scaled_dot_product_attention(
+            query.float(), key.float(), value.float()
+        ).half()
+
+        self.assertEqual(output.dtype, torch.float16)
+        torch.testing.assert_close(output, expected, atol=2e-3, rtol=2e-3)
 
 
 if __name__ == "__main__":
