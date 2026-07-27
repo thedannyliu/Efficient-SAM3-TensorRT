@@ -183,7 +183,153 @@ accuracy is unusable. The current conclusion is therefore: TensorRT integration
 works, and the 90% precision boundary is known, but no accuracy-qualified
 end-to-end acceleration has yet been demonstrated.
 
-The next candidate (`11515363`) starts from the correct FP32 ONNX graph and uses
-ModelOpt calibration-aware FP8 Q/DQ for Conv/MatMul while retaining unquantized
-operations and MHA accumulation in FP32. This avoids converting the entire graph
-to FP16 merely as a side effect of quantization.
+The first attempt (`11515363`) exposed an ONNX external-data validation bug.
+After fixing validation, retry `11515378` completed on one H200 with TensorRT
+11.1.0.106. It starts from the correct FP32 ONNX graph and uses ModelOpt
+calibration-aware FP8 Q/DQ for 193 Conv/MatMul nodes, while retaining unquantized
+operations and MHA accumulation in FP32. The 16 calibration frames came from
+`sav_018669`.
+
+| Vision trunk candidate | Mean ms | Effective FPS | Cosine vs FP32 |
+| --- | ---: | ---: | ---: |
+| TensorRT FP32 (`11514667`) | 48.924 | 20.440 | 0.999996 |
+| TensorRT full FP8 (`11515378`) | 12.977 | 77.062 | 0.037865 |
+
+Full FP8 is 3.77x faster than the FP32 TensorRT trunk in isolation, but its
+feature cosine is unusable. It therefore did not advance to end-to-end mIoU
+evaluation.
+
+While preparing partial FP8, inspection found that the selector discarded the
+ONNX block hierarchy and retained only generic leaf names such as `linear_119`.
+Commit `460a206` preserves the complete semantic scope, and a test confirms that
+`blocks.N` remains selectable. Each eight-block regular expression now selects
+exactly 48 MatMul nodes. H200 array `11515414[0-3]` evaluates blocks 0-7, 8-15,
+16-23, and 24-31 independently with FP32 fallback and FP32 MHA accumulation.
+It produced:
+
+| FP8 block range | Mean ms | Cosine vs FP32 | Result |
+| --- | ---: | ---: | --- |
+| 0-7 | 47.021 | 0.977180 | feature pass; 4.04% faster than TRT FP32 |
+| 8-15 | 49.760 | 0.988102 | accurate but 1.71% slower |
+| 16-23 | 49.674 | 0.998877 | accurate but 1.53% slower |
+| 24-31 | 50.591 | 0.999222 | accurate but 3.41% slower |
+
+The full end-to-end check for blocks 0-7 is `11515450`, using the same fixed
+three videos and 32 propagated frames as native run `11515351`. It retained
+99.25% mIoU (`0.09082` versus `0.09150`) but steady-state propagation was
+96.055 ms instead of 72.470 ms. A partially FP32 TensorRT engine is therefore
+not competitive with native BF16 even when it is slightly faster than the
+TensorRT FP32 reference.
+
+Increasing FP8 coverage exposed nonlinear error accumulation:
+
+| FP8 block range | Mean ms | Cosine vs FP32 |
+| --- | ---: | ---: |
+| 16-31 (`11515436`) | 42.439 | 0.813187 |
+| 8-31 (`11515437`) | 27.833 | 0.054065 |
+| 0-7 and 16-31 (`11515443`) | 27.206 | 0.609971 |
+| all 32 blocks, level 0 (`11515476`) | 20.536 | 0.037504 |
+
+Attention-only FP8 (`11515467`, 128 MatMul nodes) reached 20.538 ms but only
+0.038853 cosine, locating the dominant sensitivity in attention. The patch
+embedding Conv selected by `11515478` is unsupported by ModelOpt FP8 and
+received no Q/DQ nodes; the quantizer now excludes Conv by default in FP8 mode
+to report actual coverage accurately.
+
+The next calibration jobs sample 48 frames uniformly across all three fixed
+videos rather than using 16 consecutive frames from one video. Jobs `11515484`
+and `11515485` screen all-block and full-scope FP8 with the broader calibration
+set. Attention is also split into eight-block groups (`11515488[0-3]`) and into
+projection versus attention-core MatMul (`11515491`, `11515492`). Precision
+screens use TensorRT builder level 0; only passing candidates are rebuilt at
+level 5 for speed measurement.
+
+Uniform 48-frame calibration did not improve all-block FP8: `11515484` produced
+0.037958 cosine versus 0.037504 with the original 16 frames. Duplicate
+`11515485` was cancelled after both jobs reported the same 192 selected MatMul
+nodes and 384 Q/DQ pairs.
+
+The finer component split shows an interaction rather than one universally
+unsafe operation class:
+
+| FP8 scope | Builder | Mean ms | Cosine vs FP32 |
+| --- | ---: | ---: | ---: |
+| all MLP (`11515466`) | 5 | 52.030 | 0.983510 |
+| all attention projections (`11515491`) | 0 | 121.847 | 0.988017 |
+| all attention core MatMul (`11515492`) | 0 | 119.430 | 0.968714 |
+| all attention projections + core (`11515467`) | 5 | 20.538 | 0.038853 |
+| projections + MLP, core FP32 (`11515520`) | 0 | 91.153 | 0.977780 |
+
+Builder-level-0 latency is only a fast screening metric and must not be compared
+with the level-5 timings. Both attention halves pass independently, but
+quantizing them consecutively collapses feature parity. The official
+`disable_mha_qdq` path (`11515518`) matches the explicit projections-plus-MLP
+scope at 0.977814 cosine. Formal level-5 rebuilds are `11515552` for core-only
+and `11515553` for projections-plus-MLP. Job `11515517` separately checks
+entropy calibration as a control.
+
+The level-5 rebuilds completed as follows:
+
+| Candidate | Mean ms | Effective FPS | Cosine vs FP32 |
+| --- | ---: | ---: | ---: |
+| attention core FP8 (`11515552`) | 46.127 | 21.679 | 0.990682 |
+| projections + MLP FP8 (`11515553`) | 52.875 | 18.912 | 0.976551 |
+
+Core-only is 6.06% faster than TensorRT FP32 but remains in the same latency
+range as the blocks-0-7 engine whose measured end-to-end propagation was much
+slower than native BF16. Projections-plus-MLP is slower than TensorRT FP32.
+Neither advances to end-to-end testing. This leaves no accuracy-qualified PTQ
+candidate that can plausibly beat native BF16 end-to-end.
+
+Attention-only eight-block screens further show the depth sensitivity:
+
+| Attention FP8 block range | Cosine vs FP32 |
+| --- | ---: |
+| 0-7 | 0.699224 |
+| 8-15 | 0.463401 |
+| 16-23 | 0.884360 |
+| 24-31 | 0.921678 |
+
+## INT8 control
+
+Full INT8 job `11515606` calibrated successfully but TensorRT could not find an
+implementation for the quantized patch-embedding Conv. Retrying only the 192
+transformer MatMul nodes in `11515612` succeeded with max calibration:
+
+| Candidate | Builder | Mean ms | Cosine vs FP32 |
+| --- | ---: | ---: | ---: |
+| INT8 blocks 0-31 (`11515612`) | 0 | 49.838 | 0.966941 |
+
+This passes the precision screen. Level-5 rebuild `11515623` is the next formal
+latency candidate. Initial 48-frame entropy jobs were cancelled after measuring
+75-90 seconds of histogram work per calibration frame; at that rate they would
+occupy GPUs for roughly one hour. Job `11515624` uses four uniformly spaced
+frames to retain an entropy-vs-max control without delaying the main loop.
+
+Level-5 INT8 `11515623` produced 29.116 ms, 34.345 effective FPS, and 0.965917
+feature cosine. This is 1.68x faster than TensorRT FP32. The corresponding
+three-video end-to-end run `11515628` retained 100.81% mIoU (`0.09224` versus
+native `0.09150`) but reached 75.334 ms / 13.274 FPS steady-state versus native
+72.470 ms / 13.799 FPS. It is accuracy-qualified but 3.95% slower end-to-end.
+Jobs `11515634` and `11515635` rebuild the same graph with zero and three
+auxiliary TensorRT streams to try to close the remaining gap.
+
+Auxiliary streams did not materially change engine time: aux 0 produced 28.986
+ms and aux 3 produced 28.991 ms, compared with 29.116 ms by the default
+one-aux-stream engine. A BF16 output-boundary graph (`11515638`) also retained
+0.965896 cosine and 29.125 ms standalone latency. Its end-to-end run `11516061`
+improved steady-state latency from 75.334 to 74.953 ms by halving the output
+embedding width, with identical 0.09224 mIoU. It remains 3.43% slower than
+native BF16.
+
+Four-frame entropy INT8 (`11515624`) produced 0.963904 cosine versus 0.966941
+for max calibration and therefore did not replace the max-calibrated graph.
+
+Two-stage mixed INT8/FP8 attempts `11516062` and `11516063` initially exposed
+loss of PyTorch scope metadata after ModelOpt rewrites. Commit `14c53c9` allows
+the second stage to use scopes from the original ONNX. Retry `11516071`
+completed at 0.967703 cosine, but inspection of Q/DQ zero-point types showed
+that ModelOpt had removed the first stage rather than retaining both data
+types: the final graph contained only 130 FP8 Q nodes and no INT8 Q nodes.
+Sequential ModelOpt calls therefore do not create a genuine mixed INT8/FP8
+graph and the result was not promoted.
