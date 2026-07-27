@@ -140,7 +140,7 @@ def main() -> None:
         output_path=str(args.output),
     )
     quantized = onnx.load(args.output, load_external_data=False)
-    onnx.checker.check_model(quantized)
+    onnx.checker.check_model(str(args.output))
     report = {
         "mode": args.mode,
         "high_precision_dtype": args.high_precision_dtype,
