@@ -164,6 +164,7 @@ def profile_video(
         predictor.handle_request({"type": "close_session", "session_id": session_id})
 
     latencies = [row["latency_ms"] for row in frame_rows]
+    steady_state_latencies = latencies[1:]
     ious = [row["iou"] for row in frame_rows if row["iou"] is not None]
     return {
         "video_id": item["video_id"],
@@ -173,6 +174,12 @@ def profile_video(
         "evaluated_frames": len(ious),
         "mean_latency_ms": mean(latencies) if latencies else None,
         "effective_fps": 1000 / mean(latencies) if latencies else None,
+        "steady_state_mean_latency_ms": (
+            mean(steady_state_latencies) if steady_state_latencies else None
+        ),
+        "steady_state_fps": (
+            1000 / mean(steady_state_latencies) if steady_state_latencies else None
+        ),
         "mean_iou": mean(ious) if ious else None,
         "frame_rows": frame_rows,
     }
@@ -228,6 +235,11 @@ def main() -> None:
         predictor.shutdown()
 
     latency = [row["mean_latency_ms"] for row in videos if row["mean_latency_ms"]]
+    steady_state_latency = [
+        row["steady_state_mean_latency_ms"]
+        for row in videos
+        if row["steady_state_mean_latency_ms"]
+    ]
     ious = [row["mean_iou"] for row in videos if row["mean_iou"] is not None]
     report = {
         "schema_version": 1,
@@ -247,6 +259,12 @@ def main() -> None:
         "hostname": platform.node(),
         "mean_latency_ms": mean(latency) if latency else None,
         "effective_fps": 1000 / mean(latency) if latency else None,
+        "steady_state_mean_latency_ms": (
+            mean(steady_state_latency) if steady_state_latency else None
+        ),
+        "steady_state_fps": (
+            1000 / mean(steady_state_latency) if steady_state_latency else None
+        ),
         "mean_iou": mean(ious) if ious else None,
         "cuda_peak_allocated_mb": torch.cuda.max_memory_allocated() / 1024**2,
         "videos": videos,
