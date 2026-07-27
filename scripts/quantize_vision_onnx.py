@@ -43,6 +43,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--report", type=Path, required=True)
     parser.add_argument("--calibration-dir", type=Path, required=True)
     parser.add_argument("--calibration-samples", type=int, default=16)
+    parser.add_argument(
+        "--calibration-method", choices=("max", "entropy"), default="max"
+    )
     parser.add_argument("--mode", choices=("fp8", "int8"), required=True)
     parser.add_argument(
         "--high-precision-dtype",
@@ -55,6 +58,7 @@ def parse_args() -> argparse.Namespace:
         default="fp16",
     )
     parser.add_argument("--scope-regex", action="append", default=[])
+    parser.add_argument("--disable-mha-qdq", action="store_true")
     parser.add_argument(
         "--op-type", action="append", choices=("Conv", "MatMul", "Gemm"), default=[]
     )
@@ -147,12 +151,13 @@ def main() -> None:
         str(args.onnx),
         quantize_mode=args.mode,
         calibration_data_reader=CalibrationReader(samples),
-        calibration_method="max",
+        calibration_method=args.calibration_method,
         calibration_eps=["cuda:0", "cpu"],
         op_types_to_quantize=sorted(op_types),
         nodes_to_quantize=selected,
         high_precision_dtype=args.high_precision_dtype,
         mha_accumulation_dtype=args.mha_accumulation_dtype,
+        disable_mha_qdq=args.disable_mha_qdq,
         use_external_data_format=True,
         output_path=str(args.output),
     )
@@ -163,6 +168,8 @@ def main() -> None:
         "high_precision_dtype": args.high_precision_dtype,
         "mha_accumulation_dtype": args.mha_accumulation_dtype,
         "calibration_dtype": str(calibration_dtype),
+        "calibration_method": args.calibration_method,
+        "disable_mha_qdq": args.disable_mha_qdq,
         "source": str(args.onnx),
         "output": str(args.output),
         "scope_regex": args.scope_regex,

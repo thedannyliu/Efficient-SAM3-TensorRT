@@ -26,6 +26,9 @@ scope_args=()
 if [[ -n "${SCOPE_REGEX:-}" ]]; then
   scope_args+=(--scope-regex "${SCOPE_REGEX}")
 fi
+if [[ "${DISABLE_MHA_QDQ:-0}" == "1" ]]; then
+  scope_args+=(--disable-mha-qdq)
+fi
 
 nvidia-smi
 python scripts/quantize_vision_onnx.py \
@@ -34,6 +37,7 @@ python scripts/quantize_vision_onnx.py \
   --report "${run_dir}/quantization.json" \
   --calibration-dir "${CALIBRATION_DIR:?set CALIBRATION_DIR}" \
   --calibration-samples "${CALIBRATION_SAMPLES:-16}" \
+  --calibration-method "${CALIBRATION_METHOD:-max}" \
   --mode "${mode}" \
   --high-precision-dtype "${HIGH_PRECISION_DTYPE:-fp16}" \
   --mha-accumulation-dtype "${MHA_ACCUMULATION_DTYPE:-fp16}" \

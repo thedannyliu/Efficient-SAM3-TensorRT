@@ -29,6 +29,11 @@ component_suffix="${component:+_${component}}"
 run_dir="results/${SLURM_ARRAY_JOB_ID}_${SLURM_ARRAY_TASK_ID}/blocks_${start}_${end}${component_suffix}_fp8"
 mkdir -p "${run_dir}" logs
 
+quantization_args=()
+if [[ "${DISABLE_MHA_QDQ:-0}" == "1" ]]; then
+  quantization_args+=(--disable-mha-qdq)
+fi
+
 nvidia-smi
 python scripts/quantize_vision_onnx.py \
   --onnx "${source_dir}/vision_trunk.onnx" \
@@ -36,10 +41,12 @@ python scripts/quantize_vision_onnx.py \
   --report "${run_dir}/quantization.json" \
   --calibration-dir "${CALIBRATION_DIR:?set CALIBRATION_DIR}" \
   --calibration-samples "${CALIBRATION_SAMPLES:-16}" \
+  --calibration-method "${CALIBRATION_METHOD:-max}" \
   --mode fp8 \
   --high-precision-dtype "${HIGH_PRECISION_DTYPE:-fp32}" \
   --mha-accumulation-dtype "${MHA_ACCUMULATION_DTYPE:-fp32}" \
-  --scope-regex "${scope_regex}"
+  --scope-regex "${scope_regex}" \
+  "${quantization_args[@]}"
 
 python scripts/build_benchmark_engine.py \
   --onnx "${run_dir}/vision_trunk.fp8.onnx" \
