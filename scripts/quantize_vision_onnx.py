@@ -67,7 +67,7 @@ def semantic_scope(node: onnx.NodeProto) -> str:
     if encoded:
         scopes = ast.literal_eval(encoded)
         if scopes:
-            return scopes[-1]
+            return " -> ".join(scope for scope in scopes if scope)
     return node.name.strip("/").replace("/", ".")
 
 

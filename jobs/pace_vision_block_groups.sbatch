@@ -7,7 +7,7 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=128G
 #SBATCH --time=04:00:00
-#SBATCH --array=0-3%1
+#SBATCH --array=0-3%4
 #SBATCH --output=logs/%x-%A_%a.out
 #SBATCH --error=logs/%x-%A_%a.err
 
@@ -35,6 +35,8 @@ python scripts/quantize_vision_onnx.py \
   --calibration-dir "${CALIBRATION_DIR:?set CALIBRATION_DIR}" \
   --calibration-samples "${CALIBRATION_SAMPLES:-16}" \
   --mode fp8 \
+  --high-precision-dtype "${HIGH_PRECISION_DTYPE:-fp32}" \
+  --mha-accumulation-dtype "${MHA_ACCUMULATION_DTYPE:-fp32}" \
   --scope-regex "${scope_regex}"
 
 python scripts/build_benchmark_engine.py \
@@ -42,4 +44,3 @@ python scripts/build_benchmark_engine.py \
   --engine "${run_dir}/vision_trunk.fp8.engine" \
   --reference "${source_dir}/reference.pt" \
   --report "${run_dir}/report.json"
-
