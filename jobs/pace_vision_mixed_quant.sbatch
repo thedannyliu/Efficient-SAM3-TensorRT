@@ -49,6 +49,7 @@ python scripts/quantize_vision_onnx.py \
   --mode "${rest_mode}" \
   --high-precision-dtype fp32 \
   --mha-accumulation-dtype fp32 \
+  --scope-map-onnx "${source_dir}/vision_trunk.onnx" \
   --scope-regex "(attn\\.(qkv|proj)|\\.mlp)"
 
 python scripts/build_benchmark_engine.py \

@@ -58,6 +58,7 @@ def parse_args() -> argparse.Namespace:
         default="fp16",
     )
     parser.add_argument("--scope-regex", action="append", default=[])
+    parser.add_argument("--scope-map-onnx", type=Path)
     parser.add_argument("--disable-mha-qdq", action="store_true")
     parser.add_argument(
         "--op-type", action="append", choices=("Conv", "MatMul", "Gemm"), default=[]
@@ -122,6 +123,12 @@ def main() -> None:
     if calibration_dtype is None:
         raise RuntimeError(f"unsupported calibration input type: {input_type}")
     expressions = [re.compile(pattern) for pattern in args.scope_regex]
+    scope_by_name = {}
+    if args.scope_map_onnx:
+        scope_model = onnx.load(args.scope_map_onnx, load_external_data=False)
+        scope_by_name = {
+            node.name: semantic_scope(node) for node in scope_model.graph.node if node.name
+        }
     default_op_types = ("MatMul", "Gemm") if args.mode == "fp8" else (
         "Conv",
         "MatMul",
@@ -131,7 +138,7 @@ def main() -> None:
     selected = []
     scopes = {}
     for node in model.graph.node:
-        scope = semantic_scope(node)
+        scope = scope_by_name.get(node.name, semantic_scope(node))
         if node.op_type not in op_types:
             continue
         if expressions and not any(expression.search(scope) for expression in expressions):
@@ -173,6 +180,7 @@ def main() -> None:
         "source": str(args.onnx),
         "output": str(args.output),
         "scope_regex": args.scope_regex,
+        "scope_map_onnx": str(args.scope_map_onnx) if args.scope_map_onnx else None,
         "op_types": sorted(op_types),
         "selected_node_count": len(selected),
         "selected_scopes": scopes,
