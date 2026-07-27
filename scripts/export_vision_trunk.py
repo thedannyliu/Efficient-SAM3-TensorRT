@@ -28,6 +28,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--fp32-layernorm", action="store_true")
     parser.add_argument("--fp32-softmax", action="store_true")
     parser.add_argument("--fp32-blocks", default="")
+    parser.add_argument("--fp32-residuals", action="store_true")
     return parser.parse_args()
 
 
@@ -64,6 +65,36 @@ class FP32Block(torch.nn.Module):
 
     def forward(self, value):
         return self.block(value.float()).to(value.dtype)
+
+
+class FP32ResidualBlock(torch.nn.Module):
+    def __init__(self, block: torch.nn.Module, partition, unpartition) -> None:
+        super().__init__()
+        self.block = block
+        self.partition = partition
+        self.unpartition = unpartition
+
+    def forward(self, value):
+        compute_dtype = self.block.norm1.weight.dtype
+        shortcut = value.float()
+        branch = self.block.norm1(value.to(compute_dtype))
+        if self.block.window_size > 0:
+            height, width = branch.shape[1:3]
+            branch, padded_shape = self.partition(branch, self.block.window_size)
+        branch = self.block.ls1(self.block.attn(branch))
+        if self.block.window_size > 0:
+            branch = self.unpartition(
+                branch,
+                self.block.window_size,
+                padded_shape,
+                (height, width),
+            )
+        residual = shortcut + self.block.dropout(self.block.drop_path(branch)).float()
+        branch = self.block.mlp(
+            self.block.norm2(residual.to(compute_dtype))
+        )
+        branch = self.block.ls2(branch)
+        return residual + self.block.dropout(self.block.drop_path(branch)).float()
 
 
 def parse_fp32_blocks(value: str) -> list[int]:
@@ -115,7 +146,14 @@ def main() -> None:
         "bf16": torch.bfloat16,
     }[args.precision]
     model = model.to(dtype=dtype)
+    if args.fp32_residuals:
+        for block_index, block in enumerate(model.blocks):
+            model.blocks[block_index] = FP32ResidualBlock(
+                block, vitdet.window_partition, vitdet.window_unpartition
+            )
     fp32_blocks = parse_fp32_blocks(args.fp32_blocks)
+    if args.fp32_residuals and fp32_blocks:
+        raise ValueError("--fp32-residuals and --fp32-blocks are mutually exclusive")
     for block_index in fp32_blocks:
         model.blocks[block_index] = FP32Block(model.blocks[block_index])
     model_input = input_fp32.to(dtype=dtype)
@@ -153,6 +191,7 @@ def main() -> None:
         "fp32_layer_norms": fp32_layer_norms,
         "fp32_softmax": args.fp32_softmax,
         "fp32_blocks": fp32_blocks,
+        "fp32_residuals": args.fp32_residuals,
         "onnx": str(args.onnx),
         "reference": str(args.reference),
     }

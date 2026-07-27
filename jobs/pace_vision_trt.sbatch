@@ -31,6 +31,9 @@ fi
 if [[ -n "${FP32_BLOCKS:-}" ]]; then
   extra_args+=(--fp32-blocks "${FP32_BLOCKS}")
 fi
+if [[ "${FP32_RESIDUALS:-0}" == "1" ]]; then
+  extra_args+=(--fp32-residuals)
+fi
 
 nvidia-smi
 python scripts/export_vision_trunk.py \

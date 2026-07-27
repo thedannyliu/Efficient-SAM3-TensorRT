@@ -4,6 +4,7 @@ import torch
 
 from scripts.export_vision_trunk import (
     FP32Block,
+    FP32ResidualBlock,
     configure_fp32_layer_norms,
     fp32_softmax_sdpa,
     parse_fp32_blocks,
@@ -54,6 +55,24 @@ class ExportPrecisionTest(unittest.TestCase):
         self.assertEqual(parse_fp32_blocks("7,0,7"), [0, 7])
         with self.assertRaises(ValueError):
             parse_fp32_blocks("32")
+
+    def test_fp32_residual_block_preserves_fp32_state(self) -> None:
+        class Block(torch.nn.Module):
+            def __init__(self) -> None:
+                super().__init__()
+                self.norm1 = torch.nn.LayerNorm(4).half()
+                self.attn = torch.nn.Linear(4, 4).half()
+                self.ls1 = torch.nn.Identity()
+                self.norm2 = torch.nn.LayerNorm(4).half()
+                self.mlp = torch.nn.Linear(4, 4).half()
+                self.ls2 = torch.nn.Identity()
+                self.dropout = torch.nn.Identity()
+                self.drop_path = torch.nn.Identity()
+                self.window_size = 0
+
+        wrapped = FP32ResidualBlock(Block(), None, None)
+        output = wrapped(torch.ones(2, 4, dtype=torch.float16))
+        self.assertEqual(output.dtype, torch.float32)
 
 
 if __name__ == "__main__":
