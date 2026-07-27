@@ -4,6 +4,8 @@ from __future__ import annotations
 import argparse
 import json
 import platform
+import time
+import uuid
 from contextlib import nullcontext
 from pathlib import Path
 from statistics import mean
@@ -15,6 +17,7 @@ import numpy as np
 import torch
 
 from sam31_trt.metrics import binary_iou
+from sam31_trt.upstream_compat import supported_kwargs
 
 
 def parse_args() -> argparse.Namespace:
@@ -73,6 +76,28 @@ def select_mask(outputs: dict[str, Any], object_id: int) -> np.ndarray:
     return masks[int(matches[0]) if matches.size else 0].astype(bool)
 
 
+def start_session(predictor: Any, resource_path: Path) -> str:
+    init_kwargs = supported_kwargs(
+        predictor.model.init_state,
+        {
+            "resource_path": str(resource_path),
+            "offload_video_to_cpu": False,
+            "offload_state_to_cpu": False,
+            "async_loading_frames": False,
+        },
+    )
+    state = predictor.model.init_state(**init_kwargs)
+    session_id = str(uuid.uuid4())
+    now = time.time()
+    predictor._all_inference_states[session_id] = {
+        "state": state,
+        "session_id": session_id,
+        "start_time": now,
+        "last_use_time": now,
+    }
+    return session_id
+
+
 def profile_video(
     predictor: Any,
     item: dict[str, Any],
@@ -80,10 +105,7 @@ def profile_video(
     max_frames: int,
 ) -> dict[str, Any]:
     frame_dir = Path(item["frames_dir"]).resolve()
-    response = predictor.handle_request(
-        {"type": "start_session", "resource_path": str(frame_dir)}
-    )
-    session_id = response["session_id"]
+    session_id = start_session(predictor, frame_dir)
     object_id = 1
     point = torch.tensor(
         [[item["point"][0] / item["width"], item["point"][1] / item["height"]]],

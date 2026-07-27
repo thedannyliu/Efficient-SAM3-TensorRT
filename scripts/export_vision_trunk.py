@@ -8,6 +8,8 @@ from pathlib import Path
 
 import torch
 
+from sam31_trt.upstream_compat import validate_vision_state_mismatch
+
 
 PREFIX = "detector.backbone.vision_backbone.trunk."
 
@@ -36,9 +38,8 @@ def main() -> None:
         if name.startswith(PREFIX)
     }
     model = _create_vit_backbone(use_fa3=False, use_rope_real=True)
-    missing, unexpected = model.load_state_dict(state, strict=True)
-    if missing or unexpected:
-        raise RuntimeError(f"state mismatch: missing={missing}, unexpected={unexpected}")
+    missing, unexpected = model.load_state_dict(state, strict=False)
+    derived_rope_buffers = validate_vision_state_mismatch(missing, unexpected)
     model = model.cuda().eval()
     torch.manual_seed(20260724)
     input_fp32 = torch.randn(1, 3, 1008, 1008, device="cuda")
@@ -78,6 +79,7 @@ def main() -> None:
         "output_shape": list(native_output.shape),
         "parameters": sum(parameter.numel() for parameter in model.parameters()),
         "checkpoint_keys": len(state),
+        "derived_rope_buffers": len(derived_rope_buffers),
         "onnx": str(args.onnx),
         "reference": str(args.reference),
     }
@@ -89,4 +91,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
