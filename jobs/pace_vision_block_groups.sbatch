@@ -18,7 +18,7 @@ source .venv/bin/activate
 export PYTHONPATH="${PWD}/src:${PYTHONPATH:-}"
 export PYTHONUNBUFFERED=1
 
-source_dir="${SOURCE_DIR:?set SOURCE_DIR to an FP16 vision_trunk result}"
+source_dir="${SOURCE_DIR:?set SOURCE_DIR to a vision_trunk export result}"
 group="${SLURM_ARRAY_TASK_ID}"
 start=$((group * 8))
 end=$((start + 7))
@@ -43,4 +43,5 @@ python scripts/build_benchmark_engine.py \
   --onnx "${run_dir}/vision_trunk.fp8.onnx" \
   --engine "${run_dir}/vision_trunk.fp8.engine" \
   --reference "${source_dir}/reference.pt" \
-  --report "${run_dir}/report.json"
+  --report "${run_dir}/report.json" \
+  --builder-optimization-level "${BUILDER_OPTIMIZATION_LEVEL:-5}"

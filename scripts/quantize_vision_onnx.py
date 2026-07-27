@@ -71,14 +71,26 @@ def semantic_scope(node: onnx.NodeProto) -> str:
     return node.name.strip("/").replace("/", ".")
 
 
+def evenly_spaced_paths(paths: list[Path], limit: int) -> list[Path]:
+    if limit <= 0:
+        raise ValueError("calibration sample limit must be positive")
+    if len(paths) <= limit:
+        return paths
+    indices = np.linspace(0, len(paths) - 1, num=limit, dtype=int)
+    return [paths[index] for index in indices]
+
+
 def calibration_samples(
     root: Path, limit: int, dtype: np.dtype
 ) -> tuple[list[np.ndarray], list[str]]:
-    paths = sorted(
-        path
-        for suffix in ("*.jpg", "*.jpeg", "*.png")
-        for path in root.rglob(suffix)
-    )[:limit]
+    paths = evenly_spaced_paths(
+        sorted(
+            path
+            for suffix in ("*.jpg", "*.jpeg", "*.png")
+            for path in root.rglob(suffix)
+        ),
+        limit,
+    )
     samples = []
     used_paths = []
     for path in paths:

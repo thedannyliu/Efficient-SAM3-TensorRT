@@ -18,7 +18,7 @@ export PYTHONPATH="${PWD}/src:${PYTHONPATH:-}"
 export PYTHONUNBUFFERED=1
 
 mode="${MODE:?set MODE to fp8 or int8}"
-source_dir="${SOURCE_DIR:?set SOURCE_DIR to an FP16 vision_trunk result}"
+source_dir="${SOURCE_DIR:?set SOURCE_DIR to a vision_trunk export result}"
 run_dir="results/${SLURM_JOB_ID}/vision_trunk_${mode}"
 mkdir -p "${run_dir}" logs
 
@@ -43,4 +43,5 @@ python scripts/build_benchmark_engine.py \
   --onnx "${run_dir}/vision_trunk.${mode}.onnx" \
   --engine "${run_dir}/vision_trunk.${mode}.engine" \
   --reference "${source_dir}/reference.pt" \
-  --report "${run_dir}/report.json"
+  --report "${run_dir}/report.json" \
+  --builder-optimization-level "${BUILDER_OPTIMIZATION_LEVEL:-5}"
