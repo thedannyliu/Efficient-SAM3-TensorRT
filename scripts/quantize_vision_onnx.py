@@ -44,6 +44,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--calibration-dir", type=Path, required=True)
     parser.add_argument("--calibration-samples", type=int, default=16)
     parser.add_argument("--mode", choices=("fp8", "int8"), required=True)
+    parser.add_argument(
+        "--high-precision-dtype",
+        choices=("fp32", "fp16", "bf16"),
+        default="fp16",
+    )
+    parser.add_argument(
+        "--mha-accumulation-dtype",
+        choices=("fp32", "fp16"),
+        default="fp16",
+    )
     parser.add_argument("--scope-regex", action="append", default=[])
     parser.add_argument(
         "--op-type", action="append", choices=("Conv", "MatMul", "Gemm"), default=[]
@@ -61,7 +71,9 @@ def semantic_scope(node: onnx.NodeProto) -> str:
     return node.name.strip("/").replace("/", ".")
 
 
-def calibration_samples(root: Path, limit: int) -> tuple[list[np.ndarray], list[str]]:
+def calibration_samples(
+    root: Path, limit: int, dtype: np.dtype
+) -> tuple[list[np.ndarray], list[str]]:
     paths = sorted(
         path
         for suffix in ("*.jpg", "*.jpeg", "*.png")
@@ -76,7 +88,7 @@ def calibration_samples(root: Path, limit: int) -> tuple[list[np.ndarray], list[
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         image = cv2.resize(image, (1008, 1008), interpolation=cv2.INTER_LINEAR)
         image = (image.astype(np.float32) / 255.0 - 0.5) / 0.5
-        samples.append(np.transpose(image, (2, 0, 1)).astype(np.float16))
+        samples.append(np.transpose(image, (2, 0, 1)).astype(dtype))
         used_paths.append(str(path))
     if not samples:
         raise RuntimeError(f"no calibration images found under {root}")
@@ -86,6 +98,13 @@ def calibration_samples(root: Path, limit: int) -> tuple[list[np.ndarray], list[
 def main() -> None:
     args = parse_args()
     model = onnx.load(args.onnx, load_external_data=False)
+    input_type = model.graph.input[0].type.tensor_type.elem_type
+    calibration_dtype = {
+        onnx.TensorProto.FLOAT: np.dtype(np.float32),
+        onnx.TensorProto.FLOAT16: np.dtype(np.float16),
+    }.get(input_type)
+    if calibration_dtype is None:
+        raise RuntimeError(f"unsupported calibration input type: {input_type}")
     expressions = [re.compile(pattern) for pattern in args.scope_regex]
     op_types = set(args.op_type or ("Conv", "MatMul", "Gemm"))
     selected = []
@@ -104,7 +123,7 @@ def main() -> None:
         raise RuntimeError("precision selection matched no Conv/MatMul/Gemm nodes")
 
     samples, sample_paths = calibration_samples(
-        args.calibration_dir, args.calibration_samples
+        args.calibration_dir, args.calibration_samples, calibration_dtype
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     quantize(
@@ -115,13 +134,18 @@ def main() -> None:
         calibration_eps=["cuda:0", "cpu"],
         op_types_to_quantize=sorted(op_types),
         nodes_to_quantize=selected,
-        high_precision_dtype="fp16",
+        high_precision_dtype=args.high_precision_dtype,
+        mha_accumulation_dtype=args.mha_accumulation_dtype,
+        use_external_data_format=True,
         output_path=str(args.output),
     )
     quantized = onnx.load(args.output, load_external_data=False)
     onnx.checker.check_model(quantized)
     report = {
         "mode": args.mode,
+        "high_precision_dtype": args.high_precision_dtype,
+        "mha_accumulation_dtype": args.mha_accumulation_dtype,
+        "calibration_dtype": str(calibration_dtype),
         "source": str(args.onnx),
         "output": str(args.output),
         "scope_regex": args.scope_regex,
@@ -145,4 +169,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

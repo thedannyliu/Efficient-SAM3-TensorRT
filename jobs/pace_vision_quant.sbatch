@@ -35,6 +35,8 @@ python scripts/quantize_vision_onnx.py \
   --calibration-dir "${CALIBRATION_DIR:?set CALIBRATION_DIR}" \
   --calibration-samples "${CALIBRATION_SAMPLES:-16}" \
   --mode "${mode}" \
+  --high-precision-dtype "${HIGH_PRECISION_DTYPE:-fp16}" \
+  --mha-accumulation-dtype "${MHA_ACCUMULATION_DTYPE:-fp16}" \
   "${scope_args[@]}"
 
 python scripts/build_benchmark_engine.py \
@@ -42,4 +44,3 @@ python scripts/build_benchmark_engine.py \
   --engine "${run_dir}/vision_trunk.${mode}.engine" \
   --reference "${source_dir}/reference.pt" \
   --report "${run_dir}/report.json"
-
