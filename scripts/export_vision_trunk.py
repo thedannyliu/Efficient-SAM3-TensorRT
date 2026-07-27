@@ -4,9 +4,11 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import types
 from pathlib import Path
 
 import torch
+import torch.nn.functional as functional
 
 from sam31_trt.upstream_compat import validate_vision_state_mismatch
 
@@ -21,7 +23,28 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--onnx", type=Path, required=True)
     parser.add_argument("--reference", type=Path, required=True)
     parser.add_argument("--precision", choices=("fp32", "fp16"), default="fp16")
+    parser.add_argument("--fp32-layernorm", action="store_true")
     return parser.parse_args()
+
+
+def fp32_layer_norm_forward(self, value):
+    output = functional.layer_norm(
+        value.float(),
+        self.normalized_shape,
+        None if self.weight is None else self.weight.float(),
+        None if self.bias is None else self.bias.float(),
+        self.eps,
+    )
+    return output.to(value.dtype)
+
+
+def configure_fp32_layer_norms(model: torch.nn.Module) -> int:
+    count = 0
+    for module in model.modules():
+        if isinstance(module, torch.nn.LayerNorm):
+            module.forward = types.MethodType(fp32_layer_norm_forward, module)
+            count += 1
+    return count
 
 
 def main() -> None:
@@ -49,6 +72,7 @@ def main() -> None:
     model = _create_vit_backbone(use_fa3=False, use_rope_real=True)
     missing, unexpected = model.load_state_dict(state, strict=False)
     derived_rope_buffers = validate_vision_state_mismatch(missing, unexpected)
+    fp32_layer_norms = configure_fp32_layer_norms(model) if args.fp32_layernorm else 0
     model = model.cuda().eval()
     torch.manual_seed(20260724)
     input_fp32 = torch.randn(1, 3, 1008, 1008, device="cuda")
@@ -89,6 +113,7 @@ def main() -> None:
         "parameters": sum(parameter.numel() for parameter in model.parameters()),
         "checkpoint_keys": len(state),
         "derived_rope_buffers": len(derived_rope_buffers),
+        "fp32_layer_norms": fp32_layer_norms,
         "onnx": str(args.onnx),
         "reference": str(args.reference),
     }

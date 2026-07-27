@@ -21,17 +21,22 @@ precision="${PRECISION:-fp16}"
 run_dir="results/${SLURM_JOB_ID}/vision_trunk_${precision}"
 mkdir -p "${run_dir}" logs
 
+extra_args=()
+if [[ "${FP32_LAYERNORM:-0}" == "1" ]]; then
+  extra_args+=(--fp32-layernorm)
+fi
+
 nvidia-smi
 python scripts/export_vision_trunk.py \
   --checkpoint "${CHECKPOINT:-checkpoints/sam3.1_multiplex.pt}" \
   --sam3-repo external/sam3 \
   --precision "${precision}" \
   --onnx "${run_dir}/vision_trunk.onnx" \
-  --reference "${run_dir}/reference.pt"
+  --reference "${run_dir}/reference.pt" \
+  "${extra_args[@]}"
 
 python scripts/build_benchmark_engine.py \
   --onnx "${run_dir}/vision_trunk.onnx" \
   --engine "${run_dir}/vision_trunk.engine" \
   --reference "${run_dir}/reference.pt" \
   --report "${run_dir}/report.json"
-
