@@ -17,17 +17,28 @@ source .venv/bin/activate
 export PYTHONPATH="${PWD}/src:${PYTHONPATH:-}"
 export PYTHONUNBUFFERED=1
 
-source_dir="${SOURCE_DIR:?set SOURCE_DIR to an FP16 vision-trunk result}"
 level="${BUILDER_LEVEL:?set BUILDER_LEVEL from 0 through 5}"
-aux_streams="${MAX_AUX_STREAMS:?set MAX_AUX_STREAMS}"
-run_dir="results/${SLURM_JOB_ID}/vision_fp16_o${level}_aux${aux_streams}"
+if [[ -n "${ONNX_PATH:-}" && -n "${REFERENCE_PATH:-}" ]]; then
+  onnx_path="${ONNX_PATH}"
+  reference_path="${REFERENCE_PATH}"
+else
+  source_dir="${SOURCE_DIR:?set SOURCE_DIR or ONNX_PATH and REFERENCE_PATH}"
+  onnx_path="${source_dir}/vision_trunk.onnx"
+  reference_path="${source_dir}/reference.pt"
+fi
+run_dir="results/${SLURM_JOB_ID}/${LABEL:-vision}_o${level}"
 mkdir -p "${run_dir}" logs
+
+extra_args=()
+if [[ -n "${MAX_AUX_STREAMS:-}" ]]; then
+  extra_args+=(--max-aux-streams "${MAX_AUX_STREAMS}")
+fi
 
 nvidia-smi
 python scripts/build_benchmark_engine.py \
-  --onnx "${source_dir}/vision_trunk.onnx" \
+  --onnx "${onnx_path}" \
   --engine "${run_dir}/vision_trunk.engine" \
-  --reference "${source_dir}/reference.pt" \
+  --reference "${reference_path}" \
   --report "${run_dir}/report.json" \
   --builder-optimization-level "${level}" \
-  --max-aux-streams "${aux_streams}"
+  "${extra_args[@]}"
