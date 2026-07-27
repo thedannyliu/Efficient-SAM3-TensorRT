@@ -152,3 +152,38 @@ the 32-block graph. Mixed-block prefix probes therefore use a binary search:
 - blocks 0-15 and 0-23 are the next pending prefix candidates. These use
   optimization level 0 only as a quick parity filter; accepted candidates will
   be rebuilt at level 5 for meaningful latency.
+
+The prefix boundary and end-to-end validation were then completed:
+
+- blocks 0-17: feature cosine 0.88591, rejected.
+- blocks 0-18: feature cosine 0.90072 at 44.753 ms with level 5, but end-to-end
+  mIoU retention was 0.89907, narrowly below the 0.90 task gate.
+- blocks 0-19: feature cosine 0.91177 at 45.412 ms with level 5. End-to-end
+  mIoU retention was 0.91123, so this is the smallest accepted FP32 prefix.
+- blocks 0-23: level-5 feature cosine 0.99995 at 49.325 ms. End-to-end mIoU
+  retention was 0.99899, but propagation was slower than native.
+- Keeping only residual accumulation in FP32 while all block computation stayed
+  FP16 did not recover parity (cosine 0.03684).
+
+The initial one-video/eight-frame runs made first-frame and cold-start effects
+look like a speedup. The benchmark now reports steady-state latency separately
+by excluding the first propagated frame. A fair three-video, 32-frame H200 run
+produced:
+
+| Candidate | Steady ms | Steady FPS | mIoU | Retention |
+| --- | ---: | ---: | ---: | ---: |
+| Native official BF16 (`11515351`) | 72.470 | 13.799 | 0.09150 | 1.0000 |
+| 0-19 TensorRT first call per session (`11515357`) | 72.167 | 13.857 | 0.08893 | 0.9719 |
+| Full FP16 TensorRT first call per session (`11515358`) | 72.394 | 13.813 | 0.01035 | 0.1131 |
+
+The accepted mixed candidate differs from native steady-state by only 0.42%,
+which is below a credible speedup claim. Its mean prompt time was 293.07 ms
+versus native 284.98 ms. Full FP16 prompt time was 267.26 ms but its task
+accuracy is unusable. The current conclusion is therefore: TensorRT integration
+works, and the 90% precision boundary is known, but no accuracy-qualified
+end-to-end acceleration has yet been demonstrated.
+
+The next candidate (`11515363`) starts from the correct FP32 ONNX graph and uses
+ModelOpt calibration-aware FP8 Q/DQ for Conv/MatMul while retaining unquantized
+operations and MHA accumulation in FP32. This avoids converting the entire graph
+to FP16 merely as a side effect of quantization.
