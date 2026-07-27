@@ -78,6 +78,20 @@ def main() -> None:
     onnx_ms = (perf_counter() - start) * 1000
 
     engine = TensorRTVisionTrunk(args.engine)
+    engine_io = []
+    for index in range(engine.engine.num_io_tensors):
+        name = engine.engine.get_tensor_name(index)
+        engine_io.append(
+            {
+                "name": name,
+                "format": str(engine.engine.get_tensor_format(name)),
+                "format_description": engine.engine.get_tensor_format_desc(name),
+                "vectorized_dimension": engine.engine.get_tensor_vectorized_dim(name),
+                "components_per_element": (
+                    engine.engine.get_tensor_components_per_element(name)
+                ),
+            }
+        )
     image_cuda = torch.from_numpy(image).cuda()
     torch.cuda.synchronize()
     start = perf_counter()
@@ -90,6 +104,7 @@ def main() -> None:
         "onnx_providers": session.get_providers(),
         "onnx_latency_ms_first": onnx_ms,
         "tensorrt_latency_ms_first": trt_ms,
+        "engine_io": engine_io,
         "input_kind": "real_image" if args.image else "random_stress",
         "image": str(args.image) if args.image else None,
         "native_statistics": None if native is None else statistics(native),
