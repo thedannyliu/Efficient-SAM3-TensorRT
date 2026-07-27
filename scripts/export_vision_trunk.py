@@ -53,13 +53,13 @@ def main() -> None:
     torch.manual_seed(20260724)
     input_fp32 = torch.randn(1, 3, 1008, 1008, device="cuda")
     with torch.inference_mode():
-        output_fp32 = model(input_fp32)
+        output_fp32 = model(input_fp32)[0]
 
     dtype = torch.float16 if args.precision == "fp16" else torch.float32
     model = model.to(dtype=dtype)
     model_input = input_fp32.to(dtype=dtype)
     with torch.inference_mode():
-        native_output = model(model_input)
+        native_output = model(model_input)[0]
 
     args.onnx.parent.mkdir(parents=True, exist_ok=True)
     torch.onnx.export(

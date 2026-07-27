@@ -47,7 +47,7 @@ class TensorRTVisionTrunk(torch.nn.Module):
         self.channel_list = [1024]
         self._output: torch.Tensor | None = None
 
-    def forward(self, tensor_list: Any) -> torch.Tensor:
+    def forward(self, tensor_list: Any) -> list[torch.Tensor]:
         image = getattr(tensor_list, "tensors", tensor_list)
         image = image.to(dtype=self.input_dtype).contiguous()
         if not self.context.set_input_shape(self.input_name, tuple(image.shape)):
@@ -72,5 +72,4 @@ class TensorRTVisionTrunk(torch.nn.Module):
         stream = torch.cuda.current_stream(image.device)
         if not self.context.execute_async_v3(stream.cuda_stream):
             raise RuntimeError("TensorRT vision enqueue failed")
-        return self._output
-
+        return [self._output]
