@@ -22,7 +22,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--sam3-repo", type=Path, required=True)
     parser.add_argument("--onnx", type=Path, required=True)
     parser.add_argument("--reference", type=Path, required=True)
-    parser.add_argument("--precision", choices=("fp32", "fp16"), default="fp16")
+    parser.add_argument(
+        "--precision", choices=("fp32", "fp16", "bf16"), default="fp16"
+    )
     parser.add_argument("--fp32-layernorm", action="store_true")
     parser.add_argument("--fp32-softmax", action="store_true")
     return parser.parse_args()
@@ -88,7 +90,11 @@ def main() -> None:
     with torch.inference_mode():
         output_fp32 = model(input_fp32)[0]
 
-    dtype = torch.float16 if args.precision == "fp16" else torch.float32
+    dtype = {
+        "fp32": torch.float32,
+        "fp16": torch.float16,
+        "bf16": torch.bfloat16,
+    }[args.precision]
     model = model.to(dtype=dtype)
     model_input = input_fp32.to(dtype=dtype)
     with torch.inference_mode():

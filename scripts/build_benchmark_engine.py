@@ -15,6 +15,7 @@ LOGGER = trt.Logger(trt.Logger.INFO)
 TORCH_DTYPES = {
     trt.float16: torch.float16,
     trt.float32: torch.float32,
+    trt.bfloat16: torch.bfloat16,
     trt.int32: torch.int32,
     trt.int64: torch.int64,
     trt.bool: torch.bool,
