@@ -73,3 +73,28 @@ class TensorRTVisionTrunk(torch.nn.Module):
         if not self.context.execute_async_v3(stream.cuda_stream):
             raise RuntimeError("TensorRT vision enqueue failed")
         return [self._output]
+
+
+class LimitedCallsVisionTrunk(torch.nn.Module):
+    """Use an accelerated trunk for initial calls, then fall back to native."""
+
+    def __init__(
+        self,
+        accelerated: torch.nn.Module,
+        native: torch.nn.Module,
+        call_limit: int,
+    ) -> None:
+        super().__init__()
+        if call_limit <= 0:
+            raise ValueError("call_limit must be positive")
+        self.accelerated = accelerated
+        self.native = native
+        self.call_limit = call_limit
+        self.calls = 0
+        self.channel_list = native.channel_list
+
+    def forward(self, tensor_list: Any):
+        self.calls += 1
+        if self.calls <= self.call_limit:
+            return self.accelerated(tensor_list)
+        return self.native(tensor_list)

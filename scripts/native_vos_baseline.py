@@ -37,6 +37,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--compile", action="store_true")
     parser.add_argument("--use-fa3", action="store_true")
     parser.add_argument("--vision-engine", type=Path)
+    parser.add_argument("--vision-engine-call-limit", type=int)
     return parser.parse_args()
 
 
@@ -204,12 +205,19 @@ def main() -> None:
         use_rope_real=True,
         async_loading_frames=False,
     )
+    vision_trunk = None
     if args.vision_engine:
-        from sam31_trt.runtime import TensorRTVisionTrunk
+        from sam31_trt.runtime import LimitedCallsVisionTrunk, TensorRTVisionTrunk
 
-        predictor.model.detector.backbone.vision_backbone.trunk = (
-            TensorRTVisionTrunk(args.vision_engine)
-        )
+        native_trunk = predictor.model.detector.backbone.vision_backbone.trunk
+        vision_trunk = TensorRTVisionTrunk(args.vision_engine)
+        if args.vision_engine_call_limit is not None:
+            vision_trunk = LimitedCallsVisionTrunk(
+                vision_trunk,
+                native_trunk,
+                args.vision_engine_call_limit,
+            )
+        predictor.model.detector.backbone.vision_backbone.trunk = vision_trunk
     if args.precision != "official_bf16" and hasattr(predictor, "bf16_context"):
         predictor.bf16_context.__exit__(None, None, None)
     torch.cuda.reset_peak_memory_stats()
@@ -225,6 +233,8 @@ def main() -> None:
         "schema_version": 1,
         "backend": "tensorrt-vision-sam3.1" if args.vision_engine else "pytorch-native-sam3.1",
         "vision_engine": str(args.vision_engine) if args.vision_engine else None,
+        "vision_engine_call_limit": args.vision_engine_call_limit,
+        "vision_engine_calls": getattr(vision_trunk, "calls", None),
         "precision": args.precision,
         "prompt_precision": "bf16",
         "compile": args.compile,

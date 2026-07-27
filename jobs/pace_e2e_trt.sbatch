@@ -21,6 +21,11 @@ label="${LABEL:?set a precision label}"
 output="results/${SLURM_JOB_ID}/e2e_${label}.json"
 mkdir -p "$(dirname "${output}")" logs
 
+extra_args=()
+if [[ -n "${VISION_ENGINE_CALL_LIMIT:-}" ]]; then
+  extra_args+=(--vision-engine-call-limit "${VISION_ENGINE_CALL_LIMIT}")
+fi
+
 nvidia-smi
 python scripts/native_vos_baseline.py \
   --manifest "${MANIFEST:?set MANIFEST to the SA-V JSONL}" \
@@ -31,5 +36,5 @@ python scripts/native_vos_baseline.py \
   --vision-engine "${VISION_ENGINE:?set VISION_ENGINE}" \
   --max-videos "${MAX_VIDEOS:-1}" \
   --max-frames "${MAX_FRAMES:-16}" \
-  --output "${output}"
-
+  --output "${output}" \
+  "${extra_args[@]}"
