@@ -27,7 +27,16 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     sys.path.insert(0, str(args.sam3_repo.resolve()))
+    from sam3.model import vitdet
     from sam3.model_builder import _create_vit_backbone
+
+    # Upstream's inference-only fused MLP always returns BF16. Replace it only
+    # in this export process so FP32 reference and FP16 ONNX have consistent
+    # activation/weight dtypes. End-to-end task mIoU remains the acceptance gate.
+    def export_addmm_act(activation, linear, value):
+        return activation()(linear(value))
+
+    vitdet.addmm_act = export_addmm_act
 
     checkpoint = torch.load(
         args.checkpoint, map_location="cpu", mmap=True, weights_only=True
