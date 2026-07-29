@@ -21,6 +21,13 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Content-Type", "application/json")
             self.end_headers()
             self.wfile.write(b'{"fps":10.5}')
+        elif self.path in {"/snapshot_raw.jpg", "/snapshot.jpg"}:
+            body = b"jpeg"
+            self.send_response(200)
+            self.send_header("Content-Type", "image/jpeg")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
         else:
             self.send_error(404)
 
@@ -87,6 +94,10 @@ class InstinctSAMClientTest(unittest.TestCase):
 
     def test_status(self) -> None:
         self.assertEqual(self.client.status()["fps"], 10.5)
+
+    def test_snapshot_routes(self) -> None:
+        self.assertEqual(self.client.raw_jpeg(), b"jpeg")
+        self.assertEqual(self.client.track_jpeg(), b"jpeg")
 
     def test_detect_contract(self) -> None:
         response = self.client.detect(b"jpeg", "monitor", 0.4, 3)

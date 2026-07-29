@@ -9,10 +9,10 @@ import numpy as np
 import rclpy
 from cv_bridge import CvBridge
 from rclpy.node import Node
-from rclpy.qos import qos_profile_sensor_data
+from rclpy.qos import DurabilityPolicy, QoSProfile, qos_profile_sensor_data
 from sensor_msgs.msg import Image
-from std_msgs.msg import String
-from std_srvs.srv import Trigger
+from std_msgs.msg import String, UInt8
+from std_srvs.srv import SetBool, Trigger
 
 from sam31_trt.gi_client import InstinctSAMClient
 from sam3_trt_msgs.srv import AddBox, SetTextPrompt
@@ -61,6 +61,7 @@ class InstinctSAMAdapter(Node):
         self.declare_parameter("base_url", "http://127.0.0.1:8767")
         self.declare_parameter("poll_fps", 20.0)
         self.declare_parameter("http_timeout", 1.0)
+        self.declare_parameter("relay_topic", "/hybrid/camera/image_raw")
         base_url = str(self.get_parameter("base_url").value)
         timeout = float(self.get_parameter("http_timeout").value)
         self.client = InstinctSAMClient(base_url, timeout=timeout)
@@ -72,8 +73,15 @@ class InstinctSAMAdapter(Node):
         self.last_overlay_sequence = 0
         self.width = 0
         self.height = 0
+        self.hybrid_enabled = False
+        self.relay_gated = False
         self.raw_publisher = self.create_publisher(
             Image, "/instinctsam/raw", qos_profile_sensor_data
+        )
+        self.relay_publisher = self.create_publisher(
+            Image,
+            str(self.get_parameter("relay_topic").value),
+            qos_profile_sensor_data,
         )
         self.overlay_publisher = self.create_publisher(
             Image, "/instinctsam/overlay", qos_profile_sensor_data
@@ -86,14 +94,21 @@ class InstinctSAMAdapter(Node):
         )
         self.create_service(AddBox, "/instinctsam/add_box", self.on_add_box)
         self.create_service(Trigger, "/instinctsam/reset", self.on_reset)
+        self.create_service(
+            SetBool, "/instinctsam/set_hybrid_relay", self.on_set_hybrid_relay
+        )
+        mode_qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
+        self.create_subscription(
+            UInt8, "/sam3_pipeline/active_mode", self.on_mode, mode_qos
+        )
         poll_fps = float(self.get_parameter("poll_fps").value)
         self.create_timer(1.0 / poll_fps, self.poll)
         self.get_logger().info(f"bridging InstinctSAM at {base_url}")
 
-    def publish_frame(self, publisher: object, frame: np.ndarray, stamp: object) -> None:
+    def image_message(self, frame: np.ndarray, stamp: object) -> Image:
         message = self.bridge.cv2_to_imgmsg(frame, encoding="bgr8")
         message.header.stamp = stamp
-        publisher.publish(message)
+        return message
 
     def poll(self) -> None:
         start = perf_counter()
@@ -111,10 +126,13 @@ class InstinctSAMAdapter(Node):
             status = self.client.status()
             self.height, self.width = raw.shape[:2]
             if raw_sequence != self.last_raw_sequence:
-                self.publish_frame(self.raw_publisher, raw, stamp)
+                message = self.image_message(raw, stamp)
+                self.raw_publisher.publish(message)
+                if self.hybrid_enabled and not self.relay_gated:
+                    self.relay_publisher.publish(message)
                 self.last_raw_sequence = raw_sequence
             if overlay_sequence != self.last_overlay_sequence:
-                self.publish_frame(self.overlay_publisher, overlay, stamp)
+                self.overlay_publisher.publish(self.image_message(overlay, stamp))
                 self.last_overlay_sequence = overlay_sequence
             status.update(
                 {
@@ -156,6 +174,17 @@ class InstinctSAMAdapter(Node):
         self.raw_reader.close()
         self.overlay_reader.close()
         return super().destroy_node()
+
+    def on_mode(self, message: UInt8) -> None:
+        self.hybrid_enabled = message.data == 2
+
+    def on_set_hybrid_relay(
+        self, request: SetBool.Request, response: SetBool.Response
+    ) -> SetBool.Response:
+        self.relay_gated = not request.data
+        response.success = True
+        response.message = "relay enabled" if request.data else "relay gated"
+        return response
 
     def on_add_box(
         self, request: AddBox.Request, response: AddBox.Response

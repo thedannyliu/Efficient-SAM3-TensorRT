@@ -6,7 +6,7 @@ from launch_ros.actions import Node
 
 def generate_launch_description() -> LaunchDescription:
     bundle_dir = LaunchConfiguration("bundle_dir")
-    source_topic = LaunchConfiguration("source_topic")
+    base_url = LaunchConfiguration("base_url")
     display_max_width = LaunchConfiguration("display_max_width")
     return LaunchDescription(
         [
@@ -18,17 +18,31 @@ def generate_launch_description() -> LaunchDescription:
                 ),
             ),
             DeclareLaunchArgument(
-                "source_topic", default_value="/camera/camera/color/image_raw"
+                "base_url", default_value="http://127.0.0.1:8767"
             ),
             DeclareLaunchArgument("display_max_width", default_value="1600"),
+            Node(
+                package="sam3_trt_ros",
+                executable="instinctsam_adapter",
+                output="screen",
+                parameters=[{"base_url": base_url}],
+            ),
+            Node(
+                package="sam3_trt_ros",
+                executable="mode_manager",
+                output="screen",
+                parameters=[
+                    {"gi_base_url": base_url, "default_mode": 2}
+                ],
+            ),
             Node(
                 package="sam3_trt_ros",
                 executable="hybrid_coordinator",
                 output="screen",
                 parameters=[
                     {
-                        "source_topic": source_topic,
                         "relay_topic": "/hybrid/camera/image_raw",
+                        "gi_base_url": base_url,
                     }
                 ],
             ),
@@ -53,14 +67,7 @@ def generate_launch_description() -> LaunchDescription:
                 package="sam3_trt_ros",
                 executable="interactive_viewer",
                 output="screen",
-                parameters=[
-                    {
-                        "mode": "hybrid",
-                        "image_topic": "/sam/preview",
-                        "result_topic": "/sam/result_json",
-                        "display_max_width": display_max_width,
-                    }
-                ],
+                parameters=[{"display_max_width": display_max_width}],
             ),
         ]
     )

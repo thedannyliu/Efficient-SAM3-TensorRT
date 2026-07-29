@@ -5,6 +5,7 @@ from threading import Event, Lock
 from time import perf_counter
 
 import cv2
+import numpy as np
 import rclpy
 from cv_bridge import CvBridge
 from rclpy.callback_groups import ReentrantCallbackGroup
@@ -13,7 +14,7 @@ from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, qos_profile_sensor_data
 from sensor_msgs.msg import Image
 from std_msgs.msg import String, UInt8
-from std_srvs.srv import Trigger
+from std_srvs.srv import SetBool, Trigger
 
 from sam2_trt_msgs.srv import AddObject
 from sam31_trt.gi_client import InstinctSAMClient
@@ -24,13 +25,11 @@ from sam3_trt_msgs.srv import SetPipelineMode, SetTextPrompt
 class HybridCoordinator(Node):
     def __init__(self) -> None:
         super().__init__("sam3_sam2_hybrid_coordinator")
-        self.declare_parameter("source_topic", "/camera/camera/color/image_raw")
         self.declare_parameter("relay_topic", "/hybrid/camera/image_raw")
         self.declare_parameter("gi_base_url", "http://127.0.0.1:8767")
         self.declare_parameter("gi_timeout", 60.0)
         self.declare_parameter("max_objects", 8)
         self.declare_parameter("min_mask_area", 25)
-        self.declare_parameter("jpeg_quality", 95)
         self.declare_parameter("sam2_service_timeout", 10.0)
         self.declare_parameter("initialization_timeout", 30.0)
 
@@ -40,10 +39,7 @@ class HybridCoordinator(Node):
             str(self.get_parameter("gi_base_url").value),
             timeout=float(self.get_parameter("gi_timeout").value),
         )
-        self.latest_frame: Image | None = None
-        self.gated = False
         self.enabled = False
-        self.frame_lock = Lock()
         self.handoff_lock = Lock()
         self.expected_stamp = 0
         self.expected_objects = 0
@@ -54,13 +50,6 @@ class HybridCoordinator(Node):
             qos_profile_sensor_data,
         )
         self.metrics = self.create_publisher(String, "/hybrid/handoff_json", 10)
-        self.create_subscription(
-            Image,
-            str(self.get_parameter("source_topic").value),
-            self.on_image,
-            qos_profile_sensor_data,
-            callback_group=callback_group,
-        )
         self.create_subscription(
             String,
             "/sam/result_json",
@@ -82,6 +71,11 @@ class HybridCoordinator(Node):
         self.reset_client = self.create_client(
             Trigger, "/sam/reset", callback_group=callback_group
         )
+        self.relay_client = self.create_client(
+            SetBool,
+            "/instinctsam/set_hybrid_relay",
+            callback_group=callback_group,
+        )
         self.create_service(
             SetTextPrompt,
             "/hybrid/set_text",
@@ -102,24 +96,15 @@ class HybridCoordinator(Node):
             + int(message.header.stamp.nanosec)
         )
 
-    def on_image(self, message: Image) -> None:
-        with self.frame_lock:
-            self.latest_frame = message
-            relay = self.enabled and not self.gated
-        if relay:
-            self.relay.publish(message)
-
     def on_mode(self, message: UInt8) -> None:
         enabled = message.data == SetPipelineMode.Request.HYBRID
-        with self.frame_lock:
-            self.enabled = enabled
-            latest = self.latest_frame
+        self.enabled = enabled
+        if self.relay_client.service_is_ready():
+            request = SetBool.Request()
+            request.data = enabled
+            self.relay_client.call_async(request)
         if self.reset_client.service_is_ready():
-            future = self.reset_client.call_async(Trigger.Request())
-            if enabled and latest is not None:
-                future.add_done_callback(lambda _: self.relay.publish(latest))
-        elif enabled and latest is not None:
-            self.relay.publish(latest)
+            self.reset_client.call_async(Trigger.Request())
 
     def on_sam2_result(self, message: String) -> None:
         try:
@@ -152,13 +137,20 @@ class HybridCoordinator(Node):
         if not response.success:
             raise RuntimeError(f"/sam/reset failed: {response.message}")
 
+    def set_relay(self, enabled: bool) -> None:
+        request = SetBool.Request()
+        request.data = enabled
+        response = self.call(
+            self.relay_client, request, "/instinctsam/set_hybrid_relay"
+        )
+        if not response.success:
+            raise RuntimeError(
+                f"/instinctsam/set_hybrid_relay failed: {response.message}"
+            )
+
     def resume(self) -> None:
-        with self.frame_lock:
-            self.gated = False
-            latest = self.latest_frame
-            enabled = self.enabled
-        if enabled and latest is not None:
-            self.relay.publish(latest)
+        if self.enabled:
+            self.set_relay(True)
 
     def on_set_text(
         self, request: SetTextPrompt.Request, response: SetTextPrompt.Response
@@ -174,28 +166,21 @@ class HybridCoordinator(Node):
             text = request.text.strip()
             if not text:
                 raise ValueError("text prompt must not be empty")
-            with self.frame_lock:
-                frozen = self.latest_frame
-                self.gated = True
-            if frozen is None:
-                raise RuntimeError("no camera frame is available")
-            frozen_stamp = self.stamp_ns(frozen)
-            frame = self.bridge.imgmsg_to_cv2(frozen, desired_encoding="bgr8")
-            encode_start = perf_counter()
-            ok, encoded = cv2.imencode(
-                ".jpg",
-                frame,
-                [
-                    cv2.IMWRITE_JPEG_QUALITY,
-                    int(self.get_parameter("jpeg_quality").value),
-                ],
+            self.set_relay(False)
+            snapshot_start = perf_counter()
+            jpeg = self.client.raw_jpeg()
+            snapshot_ms = (perf_counter() - snapshot_start) * 1000.0
+            frame = cv2.imdecode(
+                np.frombuffer(jpeg, dtype=np.uint8), cv2.IMREAD_COLOR
             )
-            if not ok:
-                raise RuntimeError("JPEG encoding failed")
-            encode_ms = (perf_counter() - encode_start) * 1000.0
+            if frame is None:
+                raise RuntimeError("InstinctSAM snapshot is not a valid JPEG")
+            frozen = self.bridge.cv2_to_imgmsg(frame, encoding="bgr8")
+            frozen.header.stamp = self.get_clock().now().to_msg()
+            frozen_stamp = self.stamp_ns(frozen)
             detect_start = perf_counter()
             detection = self.client.detect(
-                encoded.tobytes(),
+                jpeg,
                 text,
                 confidence=request.confidence,
                 max_objects=int(self.get_parameter("max_objects").value),
@@ -248,7 +233,8 @@ class HybridCoordinator(Node):
                 "stamp_ns": frozen_stamp,
                 "text": text,
                 "object_count": len(objects),
-                "jpeg_encode_ms": encode_ms,
+                "gi_snapshot_ms": snapshot_ms,
+                "jpeg_encode_ms": 0.0,
                 "gi_detect_wall_ms": detect_wall_ms,
                 "gi_detect_ms": detection.detect_ms,
                 "mask_to_box_ms": select_ms,

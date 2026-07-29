@@ -42,7 +42,6 @@ def generate_launch_description() -> LaunchDescription:
                 output="screen",
                 parameters=[
                     {
-                        "source_topic": "/instinctsam/raw",
                         "relay_topic": "/hybrid/camera/image_raw",
                         "gi_base_url": base_url,
                     }

@@ -73,10 +73,10 @@ class InstinctSAMClient:
         return value
 
     def raw_jpeg(self) -> bytes:
-        return self._request("/raw.jpg", expect_json=False)
+        return self._request("/snapshot_raw.jpg", expect_json=False)
 
     def track_jpeg(self) -> bytes:
-        return self._request("/track.jpg", expect_json=False)
+        return self._request("/snapshot.jpg", expect_json=False)
 
     def set_prompt(self, text: str, confidence: float = 0.5) -> dict[str, Any]:
         self._request("/thresh", {"detect": float(confidence)})
