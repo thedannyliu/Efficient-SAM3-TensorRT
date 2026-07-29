@@ -1,0 +1,7 @@
+uint8 INSTINCTSAM=1
+uint8 HYBRID=2
+uint8 mode
+---
+bool success
+uint8 active_mode
+string message

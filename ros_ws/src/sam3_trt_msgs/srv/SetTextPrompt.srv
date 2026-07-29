@@ -1,0 +1,6 @@
+string text
+float32 confidence
+---
+bool success
+uint32 object_count
+string message
