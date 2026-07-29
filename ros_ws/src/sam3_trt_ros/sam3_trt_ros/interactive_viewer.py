@@ -166,7 +166,7 @@ class InteractiveViewer(Node):
         self.window_name = "SAM3 / SAM2 TensorRT tracking"
         cv2.namedWindow(
             self.window_name,
-            cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO,
+            cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO | cv2.WINDOW_OPENGL,
         )
         cv2.setMouseCallback(self.window_name, self.on_mouse)
 
