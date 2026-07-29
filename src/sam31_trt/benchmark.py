@@ -28,6 +28,10 @@ def summarize_rows(
     latency_fields: tuple[str, ...] = (
         "inference_ms",
         "gpu_total_ms",
+        "backbone_ms",
+        "tracker_ms",
+        "overlay_ms",
+        "adapter_poll_ms",
         "callback_total_ms",
         "source_age_ms",
     ),
