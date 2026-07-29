@@ -537,7 +537,6 @@ class InteractiveViewer(Node):
             self.text,
             self.drag_start,
             self.drag_current,
-            json.dumps(self.metrics, sort_keys=True, default=str),
         )
         if render_state == self.last_render_state:
             self.handle_key(cv2.waitKeyEx(1))
