@@ -50,8 +50,7 @@ class InteractiveViewer(Node):
         self.frames: dict[int, object] = {}
         self.frame_versions = {0: 0, 1: 0, 2: 0}
         self.label_version = 0
-        self.label_mask = None
-        self.label_colors = None
+        self.label_overlay = None
         self.last_render_state: object = None
         self.window_initialized = False
         self.window_presets = [
@@ -278,8 +277,7 @@ class InteractiveViewer(Node):
                 self.canvas_size,
                 interpolation=cv2.INTER_NEAREST,
             ).astype(bool)
-        self.label_mask = mask
-        self.label_colors = colors
+        self.label_overlay = (mask, colors)
         self.label_version += 1
 
     def update_shared_frame(self) -> None:
@@ -681,14 +679,12 @@ class InteractiveViewer(Node):
         self.last_render_state = render_state
         compose_start = perf_counter()
         rendered = self.frame.copy()
-        if (
-            smooth_mode
-            and self.label_mask is not None
-            and self.label_colors is not None
-        ):
-            rendered[self.label_mask] = (
-                rendered[self.label_mask].astype(np.float32) * 0.55
-                + self.label_colors[self.label_mask].astype(np.float32) * 0.45
+        label_overlay = self.label_overlay
+        if smooth_mode and label_overlay is not None:
+            label_mask, label_colors = label_overlay
+            rendered[label_mask] = (
+                rendered[label_mask].astype(np.float32) * 0.55
+                + label_colors[label_mask].astype(np.float32) * 0.45
             ).astype(np.uint8)
         if self.drag_start is not None and self.drag_current is not None:
             cv2.rectangle(
