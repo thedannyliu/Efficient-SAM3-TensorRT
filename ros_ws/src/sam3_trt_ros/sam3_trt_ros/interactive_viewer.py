@@ -9,7 +9,7 @@ import cv2
 import numpy as np
 import rclpy
 from cv_bridge import CvBridge
-from rclpy.executors import MultiThreadedExecutor
+from rclpy.executors import SingleThreadedExecutor
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, qos_profile_sensor_data
 from sensor_msgs.msg import Image
@@ -249,10 +249,6 @@ class InteractiveViewer(Node):
         labels = self.bridge.imgmsg_to_cv2(
             message, desired_encoding="mono8"
         )
-        if (labels.shape[1], labels.shape[0]) != self.canvas_size:
-            labels = cv2.resize(
-                labels, self.canvas_size, interpolation=cv2.INTER_NEAREST
-            )
         colors = np.zeros((*labels.shape, 3), dtype=np.uint8)
         palette = (
             (0, 255, 0),
@@ -264,7 +260,17 @@ class InteractiveViewer(Node):
             if object_id == 0:
                 continue
             colors[labels == object_id] = palette[(int(object_id) - 1) % 4]
-        self.label_mask = labels != 0
+        mask = labels != 0
+        if (labels.shape[1], labels.shape[0]) != self.canvas_size:
+            colors = cv2.resize(
+                colors, self.canvas_size, interpolation=cv2.INTER_NEAREST
+            )
+            mask = cv2.resize(
+                mask.astype(np.uint8),
+                self.canvas_size,
+                interpolation=cv2.INTER_NEAREST,
+            ).astype(bool)
+        self.label_mask = mask
         self.label_colors = colors
         self.label_version += 1
 
@@ -830,7 +836,7 @@ class InteractiveViewer(Node):
 def main() -> None:
     rclpy.init()
     node = InteractiveViewer()
-    executor = MultiThreadedExecutor(num_threads=2)
+    executor = SingleThreadedExecutor()
     executor.add_node(node)
     spin_thread = Thread(target=executor.spin, daemon=True)
     spin_thread.start()
