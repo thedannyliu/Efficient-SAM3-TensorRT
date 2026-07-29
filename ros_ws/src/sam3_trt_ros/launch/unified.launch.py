@@ -11,6 +11,7 @@ def generate_launch_description() -> LaunchDescription:
     base_url = LaunchConfiguration("base_url")
     display_max_width = LaunchConfiguration("display_max_width")
     default_mode = LaunchConfiguration("default_mode")
+    shared_memory_poll_hz = LaunchConfiguration("shared_memory_poll_hz")
     viewer = LaunchConfiguration("viewer")
     return LaunchDescription(
         [
@@ -26,6 +27,7 @@ def generate_launch_description() -> LaunchDescription:
             ),
             DeclareLaunchArgument("display_max_width", default_value="2560"),
             DeclareLaunchArgument("default_mode", default_value="2"),
+            DeclareLaunchArgument("shared_memory_poll_hz", default_value="1000.0"),
             DeclareLaunchArgument("viewer", default_value="true"),
             Node(
                 package="sam3_trt_ros",
@@ -79,7 +81,9 @@ def generate_launch_description() -> LaunchDescription:
                         "shared_memory_path": (
                             "/dev/shm/sam3_sam2_frame.bin"
                         ),
-                        "shared_memory_poll_hz": 1000.0,
+                        "shared_memory_poll_hz": ParameterValue(
+                            shared_memory_poll_hz, value_type=float
+                        ),
                         "max_objects": 8,
                         "track_concurrency": 8,
                         "pipeline_overlap": False,
