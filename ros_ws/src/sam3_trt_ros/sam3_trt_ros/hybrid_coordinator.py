@@ -11,7 +11,11 @@ from cv_bridge import CvBridge
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
-from rclpy.qos import DurabilityPolicy, QoSProfile, qos_profile_sensor_data
+from rclpy.qos import (
+    DurabilityPolicy,
+    QoSProfile,
+    ReliabilityPolicy,
+)
 from sensor_msgs.msg import Image
 from std_msgs.msg import String, UInt8
 from std_srvs.srv import SetBool, Trigger
@@ -45,10 +49,13 @@ class HybridCoordinator(Node):
         self.expected_objects = 0
         self.initialized = Event()
         self.sam2_ready = Event()
+        frozen_qos = QoSProfile(
+            depth=1, reliability=ReliabilityPolicy.RELIABLE
+        )
         self.relay = self.create_publisher(
             Image,
             str(self.get_parameter("relay_topic").value),
-            qos_profile_sensor_data,
+            frozen_qos,
         )
         self.metrics = self.create_publisher(String, "/hybrid/handoff_json", 10)
         self.create_subscription(
