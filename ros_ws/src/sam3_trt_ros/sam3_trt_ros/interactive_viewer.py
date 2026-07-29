@@ -499,7 +499,7 @@ class InteractiveViewer(Node):
             return self.display_fps
         return max(
             5.0,
-            min(self.display_fps, 30.0, 36.0 / object_count),
+            min(self.display_fps, 28.0, 36.0 / object_count),
         )
 
     def set_mode(self, mode: int) -> None:

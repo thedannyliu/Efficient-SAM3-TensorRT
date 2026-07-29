@@ -48,7 +48,7 @@ def generate_launch_description() -> LaunchDescription:
                 "gstreamer_mjpeg_decode", default_value="false"
             ),
             DeclareLaunchArgument("opengl_view", default_value="false"),
-            DeclareLaunchArgument("pipeline_overlap", default_value="false"),
+            DeclareLaunchArgument("pipeline_overlap", default_value="true"),
             DeclareLaunchArgument(
                 "pipeline_overlap_max_objects", default_value="1"
             ),
