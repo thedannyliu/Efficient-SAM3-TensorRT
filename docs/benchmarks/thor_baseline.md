@@ -48,7 +48,7 @@ not an independent per-frame kernel trace.
 | headless | 0 | per-object | 54.072/54.497 | 0.094/0.127 | 3.536/4.282 | 19.379 | 0 | fixed bundled input |
 | headless | 1 | per-object | 53.827/54.138 | 48.478/48.734 | 3.630/4.424 | 10.829 | 0 | one accepted synthetic box |
 | headless | 2 | multiplex | 43.649/43.919 | 55.894/56.582 | 3.691/4.413 | 10.942 | 0 | performance-only; both synthetic boxes became lost |
-| displayed | 1 | pending | pending | pending | pending | pending | pending | pending |
+| displayed | 1 | n/a (point) | n/a | n/a | functional smoke | 37.12/39.64 | 13.923 | 47.50/50.56 |
 | displayed | 2+ | pending | pending | pending | pending | pending | pending | pending |
 
 The two-object row is not a quality result: both seeded objects were reported
@@ -104,6 +104,7 @@ paths here after the runs.
 - `results/benchmarks/20260728_gi_sam2_camera_2obj_headless`
 - `results/benchmarks/20260728_gi_sam2_camera_2obj_direct_relay`
 - `results/benchmarks/20260728_gi_sam2_camera_2obj_overlay_paused`
+- `results/benchmarks/20260729_hybrid_1obj_display_resizable_v8`
 
 The two-object hybrid baseline used the live D455, prompt `monitor`, confidence
 0.1, TV5M FP16 bundle, 100 warm-up outputs, 1,000 measured outputs, and three
@@ -111,3 +112,10 @@ repetitions. Its three completed-output rates were 6.114, 5.746, and 5.362 FPS.
 The table reports medians across repetitions. The handoff component values are
 from the preceding functional smoke because handoff occurs before the tracking
 trace begins.
+
+The displayed single-object row used the live D455, a positive point on a
+monitor, TV5M FP16, the resizable 2560x1440 initial viewer, 100 warm-up outputs,
+1,000 measured outputs, and three repetitions at commit
+`d0b6c033fe3a0b785baefc1a200953f729b57bde`. Completed-output rates were
+13.923, 13.025, and 14.778 FPS. The table reports the median of each run-level
+metric; all three runs reported zero dropped frames.

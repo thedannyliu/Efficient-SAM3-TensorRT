@@ -188,9 +188,11 @@ Controls:
 - `r`: reset the active mode.
 - `q`: exit.
 
-The viewer displays the source image at 3x scale by default while keeping the
-status text at its original font size. Pass `display_max_width:=WIDTH` to the
-launch command when the desktop resolution is narrower than 3840 pixels.
+The viewer initially opens at 2560x1440. Drag any window edge or corner to
+choose another size; image, status text, and prompt overlays scale together.
+Rendering remains at the 1280x720 source resolution and the GUI performs the
+display scaling. Override the initial width with
+`display_max_width:=WIDTH`.
 
 Validated on the D455 and the real TV5M FP16 bundle on 2026-07-28:
 
@@ -217,6 +219,25 @@ in mode 1.
 Mode 2 publishes only the SAM2 relay image, not a duplicate raw ROS image. The
 GI overlay MJPEG reader is also paused. These two omissions reduce image
 decode/copy/DDS work without changing model precision or masks.
+
+Point/box initialization gates the live relay, drains the preceding camera
+queue, and retries the same frozen timestamp until SAM2 confirms the new object.
+This prevents a successful track from leaving the UI service waiting on a
+dropped initialization frame.
+
+Additional live-camera validation on 2026-07-29:
+
+- mode 1 accepted text, native positive-point, and native box prompts;
+- mode 2 accepted text, SAM2 positive-point, and SAM2 box prompts;
+- a warmed `monitor` text handoff took 345.1 ms to first SAM2 mask, including
+  251.3 ms GI detection and 20.8 ms SAM2 initialization;
+- the resizable displayed single-object run reached a three-run median of
+  13.923 FPS, inference mean/p95 36.53/39.64 ms, and source-age p50/p95
+  47.50/50.56 ms with zero drops.
+
+See `docs/general_instinct_runtime_review.md` for the delivered TensorRT
+boundary, effective optimizations, quality limits, and the recommended scope of
+our own SAM3 TensorRT implementation.
 
 ## 8. Baseline
 
