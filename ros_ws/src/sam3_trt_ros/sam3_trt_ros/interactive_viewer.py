@@ -165,6 +165,8 @@ class InteractiveViewer(Node):
         self.render_metrics_publisher = self.create_publisher(
             String, "/sam3_viewer/render_metrics", 10
         )
+        if self.smooth_camera_view:
+            self.create_timer(1.0 / 120.0, self.poll_shared_frame)
         self.create_subscription(
             String,
             "/sam/result_json",
@@ -295,6 +297,13 @@ class InteractiveViewer(Node):
         self.frames[2] = frame
         self.frame_versions[2] += 1
         self.raw_frame_times.append(now)
+
+    def poll_shared_frame(self) -> None:
+        start = perf_counter()
+        self.update_shared_frame()
+        self.stage_ms["shared_read"] = (
+            perf_counter() - start
+        ) * 1000.0
 
     def on_mode(self, message: UInt8) -> None:
         self.mode = int(message.data)
@@ -626,11 +635,6 @@ class InteractiveViewer(Node):
             self.next_display_time += (
                 missed_periods + 1
             ) * self.display_period
-            shared_start = perf_counter()
-            self.update_shared_frame()
-            self.stage_ms["shared_read"] = (
-                perf_counter() - shared_start
-            ) * 1000.0
         else:
             self.next_display_time = now
         if self.frame is None:
@@ -780,7 +784,9 @@ class InteractiveViewer(Node):
     def cadence(times: deque[float]) -> dict[str, float]:
         if len(times) < 2:
             return {}
-        intervals = np.diff(np.asarray(times, dtype=np.float64)) * 1000.0
+        intervals = np.diff(
+            np.asarray(list(times), dtype=np.float64)
+        ) * 1000.0
         return {
             "fps": 1000.0 / float(intervals.mean()),
             "interval_mean_ms": float(intervals.mean()),
