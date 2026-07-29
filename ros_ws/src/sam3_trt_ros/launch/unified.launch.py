@@ -12,6 +12,7 @@ def generate_launch_description() -> LaunchDescription:
     display_fps = LaunchConfiguration("display_fps")
     display_max_width = LaunchConfiguration("display_max_width")
     default_mode = LaunchConfiguration("default_mode")
+    opengl_view = LaunchConfiguration("opengl_view")
     pipeline_overlap = LaunchConfiguration("pipeline_overlap")
     pipeline_overlap_max_objects = LaunchConfiguration(
         "pipeline_overlap_max_objects"
@@ -35,6 +36,7 @@ def generate_launch_description() -> LaunchDescription:
             DeclareLaunchArgument("display_fps", default_value="60.0"),
             DeclareLaunchArgument("display_max_width", default_value="2560"),
             DeclareLaunchArgument("default_mode", default_value="2"),
+            DeclareLaunchArgument("opengl_view", default_value="false"),
             DeclareLaunchArgument("pipeline_overlap", default_value="false"),
             DeclareLaunchArgument(
                 "pipeline_overlap_max_objects", default_value="1"
@@ -122,6 +124,9 @@ def generate_launch_description() -> LaunchDescription:
                             display_fps, value_type=float
                         ),
                         "display_max_width": display_max_width,
+                        "opengl_view": ParameterValue(
+                            opengl_view, value_type=bool
+                        ),
                         "shared_memory_path": (
                             "/dev/shm/sam3_sam2_frame.bin"
                         ),

@@ -31,6 +31,7 @@ class InteractiveViewer(Node):
         super().__init__("sam3_trt_interactive_viewer")
         self.declare_parameter("display_max_width", 2560)
         self.declare_parameter("display_fps", 60.0)
+        self.declare_parameter("opengl_view", False)
         self.declare_parameter("smooth_camera_view", True)
         self.declare_parameter(
             "shared_memory_path", "/dev/shm/sam3_sam2_frame.bin"
@@ -110,6 +111,7 @@ class InteractiveViewer(Node):
         self.shared_reader: SharedFrameReader | None = None
         self.shared_reader_retry_time = 0.0
         self.display_fps = float(self.get_parameter("display_fps").value)
+        self.opengl_view = bool(self.get_parameter("opengl_view").value)
         if self.display_fps <= 0.0:
             raise ValueError("display_fps must be positive")
         self.display_period = 1.0 / self.display_fps
@@ -205,10 +207,10 @@ class InteractiveViewer(Node):
             SetCameraProfile, "/sam3_pipeline/set_camera_profile"
         )
         self.window_name = "SAM3 / SAM2 TensorRT tracking"
-        cv2.namedWindow(
-            self.window_name,
-            cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO | cv2.WINDOW_OPENGL,
-        )
+        window_flags = cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO
+        if self.opengl_view:
+            window_flags |= cv2.WINDOW_OPENGL
+        cv2.namedWindow(self.window_name, window_flags)
         cv2.setMouseCallback(self.window_name, self.on_mouse)
 
     @property
@@ -800,6 +802,7 @@ class InteractiveViewer(Node):
             "schema_version": 1,
             "mode": self.mode,
             "smooth_camera_view": self.smooth_camera_view,
+            "opengl_view": self.opengl_view,
             "target_display_fps": self.display_fps,
             "render": render,
             "raw_unique_frames": raw,
