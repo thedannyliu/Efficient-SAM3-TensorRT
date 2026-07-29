@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from threading import Event, Lock
-from time import perf_counter
+from time import perf_counter, sleep
 
 import cv2
 import numpy as np
@@ -36,6 +36,7 @@ class HybridCoordinator(Node):
         self.declare_parameter("min_mask_area", 25)
         self.declare_parameter("sam2_service_timeout", 10.0)
         self.declare_parameter("initialization_timeout", 30.0)
+        self.declare_parameter("geometry_relay_drain_ms", 120.0)
 
         callback_group = ReentrantCallbackGroup()
         self.bridge = CvBridge()
@@ -202,6 +203,10 @@ class HybridCoordinator(Node):
         if not self.sam2_ready.wait(timeout):
             raise TimeoutError("SAM2 did not become ready after mode switch")
         self.set_relay(False)
+        sleep(
+            float(self.get_parameter("geometry_relay_drain_ms").value)
+            / 1000.0
+        )
         frozen = self.frozen_frame()
         self.expected_stamp = self.stamp_ns(frozen)
         self.expected_objects = self.current_objects + 1
