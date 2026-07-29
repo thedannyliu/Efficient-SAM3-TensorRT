@@ -79,6 +79,7 @@ def generate_launch_description() -> LaunchDescription:
                         "shared_memory_path": (
                             "/dev/shm/sam3_sam2_frame.bin"
                         ),
+                        "shared_memory_poll_hz": 1000.0,
                         "max_objects": 8,
                         "track_concurrency": 8,
                         "pipeline_overlap": False,
