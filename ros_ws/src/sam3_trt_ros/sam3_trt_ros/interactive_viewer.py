@@ -27,17 +27,33 @@ class InteractiveViewer(Node):
         self.frame_versions = {0: 0, 1: 0, 2: 0}
         self.last_render_state: object = None
         self.window_initialized = False
+        self.window_presets = [
+            (1280, 720),
+            (1600, 900),
+            (1920, 1080),
+            (2560, 1440),
+            (3840, 2160),
+        ]
+        self.preset_index = 0
+        self.fullscreen = False
         self.raw_frame = None
         self.source_width = 0
         self.source_height = 0
-        self.scale = 1.0
         self.drag_start: tuple[int, int] | None = None
         self.drag_current: tuple[int, int] | None = None
         self.entering_text = False
         self.text = ""
-        self.status = "t=text, click=point, drag=box, r=reset, q=quit"
+        self.status = (
+            "t=text, click=point, drag=box, [ ]=size, f=fullscreen, r=reset"
+        )
         self.metrics: dict[str, object] = {}
         self.display_max_width = int(self.get_parameter("display_max_width").value)
+        self.preset_index = min(
+            range(len(self.window_presets)),
+            key=lambda index: abs(
+                self.window_presets[index][0] - self.display_max_width
+            ),
+        )
         self.confidence = float(self.get_parameter("confidence").value)
         self.create_subscription(
             Image,
@@ -132,15 +148,39 @@ class InteractiveViewer(Node):
         )
 
     def to_source(self, x: int, y: int) -> tuple[float, float]:
-        return x / self.scale, y / self.scale
+        return float(x), float(y)
 
-    def update_window_scale(self) -> None:
-        try:
-            _, _, width, _ = cv2.getWindowImageRect(self.window_name)
-        except cv2.error:
-            return
-        if self.source_width > 0 and width > 0:
-            self.scale = width / self.source_width
+    def apply_window_preset(self) -> None:
+        width, height = self.window_presets[self.preset_index]
+        if self.fullscreen:
+            cv2.setWindowProperty(
+                self.window_name,
+                cv2.WND_PROP_FULLSCREEN,
+                cv2.WINDOW_NORMAL,
+            )
+            self.fullscreen = False
+        cv2.resizeWindow(self.window_name, width, height)
+        self.status = f"window size: {width}x{height}"
+        self.last_render_state = None
+
+    def change_window_preset(self, offset: int) -> None:
+        self.preset_index = (
+            self.preset_index + offset
+        ) % len(self.window_presets)
+        self.apply_window_preset()
+
+    def toggle_fullscreen(self) -> None:
+        self.fullscreen = not self.fullscreen
+        cv2.setWindowProperty(
+            self.window_name,
+            cv2.WND_PROP_FULLSCREEN,
+            cv2.WINDOW_FULLSCREEN if self.fullscreen else cv2.WINDOW_NORMAL,
+        )
+        if not self.fullscreen:
+            self.apply_window_preset()
+        else:
+            self.status = "fullscreen; press f to restore"
+            self.last_render_state = None
 
     def on_mouse(self, event: int, x: int, y: int, flags: int, _: object) -> None:
         if self.entering_text or self.frame is None:
@@ -256,6 +296,12 @@ class InteractiveViewer(Node):
             self.set_mode(SetPipelineMode.Request.INSTINCTSAM)
         elif key == ord("2"):
             self.set_mode(SetPipelineMode.Request.HYBRID)
+        elif key == ord("["):
+            self.change_window_preset(-1)
+        elif key == ord("]"):
+            self.change_window_preset(1)
+        elif key == ord("f"):
+            self.toggle_fullscreen()
         elif key in (27, ord("q")):
             rclpy.shutdown()
 
@@ -276,7 +322,6 @@ class InteractiveViewer(Node):
             json.dumps(self.metrics, sort_keys=True, default=str),
         )
         if render_state == self.last_render_state:
-            self.update_window_scale()
             self.handle_key(cv2.waitKeyEx(1))
             return
         self.last_render_state = render_state
@@ -292,28 +337,37 @@ class InteractiveViewer(Node):
         lines = [f"Mode {self.mode} | 1=GI SAM3  2=GI->SAM2", self.status]
         if self.entering_text:
             lines.append(f"> {self.text}_")
-        latency = self.metrics.get(
-            "tracker_total_ms",
-            self.metrics.get("inference_ms", self.metrics.get("latency_ms")),
+        if self.mode == SetPipelineMode.Request.HYBRID:
+            latency = self.metrics.get(
+                "tracker_total_ms",
+                self.metrics.get("inference_ms", self.metrics.get("latency_ms")),
+            )
+            fps = self.metrics.get(
+                "tracking_fps",
+                self.metrics.get("fps", self.metrics.get("processed_fps")),
+            )
+            backend = self.metrics.get(
+                "tracker_backend", self.metrics.get("backend")
+            )
+            metric_parts = []
+            if latency is not None:
+                metric_parts.append(f"model {float(latency):.1f} ms")
+            if fps is not None:
+                metric_parts.append(f"{float(fps):.1f} FPS")
+            if backend is not None:
+                metric_parts.append(str(backend))
+            if metric_parts:
+                lines.append(" | ".join(metric_parts))
+        first_line_y = (
+            rendered.shape[0] - 12 - (len(lines) - 1) * 28
+            if self.mode == SetPipelineMode.Request.INSTINCTSAM
+            else 28
         )
-        fps = self.metrics.get(
-            "tracking_fps", self.metrics.get("fps", self.metrics.get("processed_fps"))
-        )
-        backend = self.metrics.get("tracker_backend", self.metrics.get("backend"))
-        metric_parts = []
-        if latency is not None:
-            metric_parts.append(f"model {float(latency):.1f} ms")
-        if fps is not None:
-            metric_parts.append(f"{float(fps):.1f} FPS")
-        if backend is not None:
-            metric_parts.append(str(backend))
-        if metric_parts:
-            lines.append(" | ".join(metric_parts))
         for index, line in enumerate(lines):
             cv2.putText(
                 rendered,
                 line,
-                (12, 28 + index * 28),
+                (12, first_line_y + index * 28),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.7,
                 (0, 255, 255),
@@ -322,11 +376,9 @@ class InteractiveViewer(Node):
             )
         cv2.imshow(self.window_name, rendered)
         if not self.window_initialized:
-            initial_width = max(self.source_width, self.display_max_width)
-            initial_height = int(initial_width * self.source_height / self.source_width)
-            cv2.resizeWindow(self.window_name, initial_width, initial_height)
+            width, height = self.window_presets[self.preset_index]
+            cv2.resizeWindow(self.window_name, width, height)
             self.window_initialized = True
-        self.update_window_scale()
         self.handle_key(cv2.waitKeyEx(1))
 
 

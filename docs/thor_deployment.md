@@ -185,14 +185,22 @@ Controls:
 - `t`: enter a text prompt for the active mode.
 - mouse single-click: positive point prompt in either mode.
 - mouse drag: box prompt in either mode.
+- `[` / `]`: select the previous/next display preset: 1280x720,
+  1600x900, 1920x1080, 2560x1440, or 3840x2160.
+- `f`: toggle fullscreen and restore the selected preset.
 - `r`: reset the active mode.
 - `q`: exit.
 
-The viewer initially opens at 2560x1440. Drag any window edge or corner to
-choose another size; image, status text, and prompt overlays scale together.
-Rendering remains at the 1280x720 source resolution and the GUI performs the
-display scaling. Override the initial width with
-`display_max_width:=WIDTH`.
+The viewer initially opens at 2560x1440. Use a preset or drag any window edge
+or corner to choose another size; image, status text, and prompt overlays scale
+together. Rendering remains at the 1280x720 source resolution and the GUI
+performs the display scaling. Mouse callbacks are already returned in source
+image coordinates, so point/box prompts remain aligned at every display size.
+Override the initial preset selection with `display_max_width:=WIDTH`.
+
+Mode 1 keeps the vendor FPS watermark at the top-left and places only our mode
+and action status at the bottom. Mode 2 draws our model latency/FPS/backend
+line because its SAM2 preview has no vendor metric watermark.
 
 Validated on the D455 and the real TV5M FP16 bundle on 2026-07-28:
 
