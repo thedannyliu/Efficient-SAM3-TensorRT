@@ -189,6 +189,19 @@ The unified launch defaults to mode 2 so an idle UI does not continuously run
 the full InstinctSAM backbone. Press `1` when native SAM3 tracking is needed;
 press `2` to return to the lower-power capture/hybrid path.
 
+The measured low-latency defaults are four concurrent object contexts and no
+cross-frame delay. They can be stated explicitly when reproducing a run:
+
+```bash
+bash scripts/thor_start_unified_desktop.sh \
+  track_concurrency:=4 pipeline_overlap:=false
+```
+
+For single-object throughput experiments only, `pipeline_overlap:=true`
+raised the 848x480@60 completed rate from 33.766 to 37.641 FPS but increased
+mean source age from 42.072 to 65.250 ms. It is therefore not the interactive
+default. See `docs/benchmarks/optimization_log.md` for the multi-object A/B.
+
 Controls:
 
 - `1`: native General Instinct SAM3/SAM3.1 tracking.
