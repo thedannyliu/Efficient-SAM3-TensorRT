@@ -221,6 +221,13 @@ but GI model loading makes a camera switch substantially slower than a window
 resize or SAM2 model switch. The UI maps its 1280x720 interaction canvas back
 to the active camera pixels before sending point/box prompts.
 
+Thor validation on 2026-07-29 found that model changes take 2.2–2.7 s. Camera
+changes take 87.7–92.8 s because the complete licensed GI runtime reloads.
+The menu therefore reports requested and observed camera FPS separately.
+848x480@60 reached 60.3 capture FPS, but its short SAM2 preview diagnostic was
+only about 8.8 FPS; 1280x720@30 remains the recommended default. The D455 does
+not expose 60 FPS at 1280x720, so that unsupported combination is not offered.
+
 Mode 1 keeps the vendor FPS watermark at the top-left and places only our mode
 and action status at the bottom. Mode 2 draws our model latency/FPS/backend
 line because its SAM2 preview has no vendor metric watermark.

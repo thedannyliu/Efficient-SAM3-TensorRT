@@ -93,6 +93,46 @@ baseline rows:
 | 1 → 2 | pending | pending | pending | |
 | 2 → 1 | pending | pending | pending | |
 
+## Runtime TinyViT selection
+
+Measured on 2026-07-29 with SAM3 commit `706e524`, SAM2 commit `b8d78ef`,
+1280x720@30 capture, one point-initialized object, the displayed viewer, 20
+warm-up outputs, and 100 measured outputs per model. These are runtime
+performance smokes, not cross-model quality measurements.
+
+| Model | Reload ms | SAM2 process memory | Tracker mean/p95 ms | GPU mean ms |
+|---|---:|---:|---:|---:|
+| TV5M | 2,218–2,328 | 22,340–22,432 MiB | 35.530/38.873 | 35.238 |
+| TV11M | 2,201–2,695 | 22,408 MiB | 37.170/40.181 | 36.857 |
+| TV21M | 2,240–2,322 | 22,610 MiB | 46.122/48.850 | 45.855 |
+
+Only one tracker is resident. The replacement is fully constructed before an
+atomic swap, and the previous tracker remains active if engine loading fails.
+Preloading three complete trackers was rejected: the single process already
+uses about 22.3–22.6 GiB, while every tracker would duplicate the large common
+prompt/track contexts for a UI action that currently takes only 2.2–2.7 s.
+
+## Runtime camera profiles
+
+Camera switching uses the vendor entrypoint and retains the TensorRT cache but
+reloads the resident GI models. `Observed FPS` is the vendor capture-only loop,
+not SAM2 output FPS.
+
+| Requested profile | Returned dimensions | Observed FPS | Switch ms | Result |
+|---|---:|---:|---:|---|
+| 640x360@30 | 640x360 | 29.98–30.02 | 87,791 | accepted |
+| 848x480@30 | 848x480 | about 30 | 87,730 | accepted |
+| 848x480@60 | 848x480 | 60.305 | 88,771 | capture accepted; SAM2 preview short diagnostic fell to about 8.8 FPS |
+| 1280x720@60 | 1280x720 | 28.87–30.02 | 87,686 | rejected from menu; D455 descriptor caps this resolution at 30 FPS |
+| 1280x720@30 | 1280x720 | 28.60 initially, 29.95 steady | 92,833 | accepted and restored as default |
+
+The D455 USB descriptor exposes 60 FPS intervals at 640x360 and 848x480, but
+only 30 FPS at 1280x720. Higher capture FPS is not automatically higher
+pipeline FPS: MJPEG encode/decode and memory-bandwidth work increased enough
+that the 848x480@60 short SAM2 preview diagnostic was slower. Use
+1280x720@30 as the current default until a fixed-input end-to-end profile
+benchmark proves otherwise.
+
 ## Raw result locations
 
 Raw result directories are intentionally ignored. Record experiment IDs and
