@@ -619,7 +619,6 @@ class InteractiveViewer(Node):
         now = perf_counter()
         if smooth_mode:
             if now < self.next_display_time:
-                self.handle_key(cv2.pollKey())
                 return
             missed_periods = max(
                 0, int((now - self.next_display_time) / self.display_period)
