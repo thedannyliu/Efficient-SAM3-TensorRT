@@ -180,9 +180,14 @@ Validated on the D455 and the real TV5M FP16 bundle on 2026-07-28:
   22.9 ms mask-to-box, and 23.7 ms SAM2 initialization;
 - subsequent SAM2 model inference was 48.4 ms for two objects.
 
-These are smoke values. The TV5M bundle printed TensorRT's cross-device engine
-warning, so rebuild its engines on Thor before treating the speed as a final
-Thor benchmark.
+After direct gated relay and pausing the unused GI overlay stream in mode 2,
+the formal two-object headless median improved from 5.746 to 13.865 FPS
+(2.413x). Model mean/p95 was 46.99/48.14 ms, and source-age p50/p95 was
+62.87/92.75 ms. See `docs/benchmarks/thor_baseline.md` for the protocol and raw
+result paths.
+
+The TV5M bundle printed TensorRT's cross-device engine warning, so rebuild its
+engines on Thor before treating this as the final achievable Thor speed.
 
 In mode 2, the coordinator converts masks to at most eight boxes and initializes
 SAM2 using the exact source timestamp. SAM2 stays loaded but receives no frames

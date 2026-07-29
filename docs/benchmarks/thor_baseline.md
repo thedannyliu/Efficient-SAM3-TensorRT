@@ -1,7 +1,7 @@
 # Thor baseline
 
-Status: original-image headless baseline complete; camera/displayed and hybrid
-baseline rows remain pending.
+Status: original-image and two-object headless hybrid baselines complete;
+displayed and hybrid quality baselines remain pending.
 
 No optimization result may be reported against this system until this document
 contains a completed baseline row using the same fixed input and protocol.
@@ -74,7 +74,7 @@ baseline rows:
 | Display mode | Objects | GI detect ms | JPEG+HTTP ms | Mask-to-box ms | SAM2 init ms | SAM2 model p50/p95 ms | Output FPS | Source age p50/p95 ms |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
 | headless | 1 | pending | pending | pending | pending | pending | pending | pending |
-| headless | 2 | pending | pending | pending | pending | pending | pending | pending |
+| headless | 2 | 212.5 smoke | 13.2 encode; 265.8 total detect wall | 22.9 | 23.7 | 49.04/54.78 | 5.746 | 92.99/330.19 |
 | headless | 4 | pending | pending | pending | pending | pending | pending | pending |
 | headless | 8 | pending | pending | pending | pending | pending | pending | pending |
 | displayed | 1 | pending | pending | pending | pending | pending | pending | pending |
@@ -101,3 +101,13 @@ paths here after the runs.
 - `results/benchmarks/20260728_gi_bundled_idle_headless`
 - `results/benchmarks/20260728_gi_bundled_1obj_headless`
 - `results/benchmarks/20260728_gi_bundled_2obj_multiplex_headless`
+- `results/benchmarks/20260728_gi_sam2_camera_2obj_headless`
+- `results/benchmarks/20260728_gi_sam2_camera_2obj_direct_relay`
+- `results/benchmarks/20260728_gi_sam2_camera_2obj_overlay_paused`
+
+The two-object hybrid baseline used the live D455, prompt `monitor`, confidence
+0.1, TV5M FP16 bundle, 100 warm-up outputs, 1,000 measured outputs, and three
+repetitions. Its three completed-output rates were 6.114, 5.746, and 5.362 FPS.
+The table reports medians across repetitions. The handoff component values are
+from the preceding functional smoke because handoff occurs before the tracking
+trace begins.
