@@ -26,7 +26,10 @@ docker run -d --name "$NAME" \
   -e CROSSOVER="${GI_CROSSOVER:-2}" \
   -e MAX_OBJECTS="${GI_MAX_OBJECTS:-24}" \
   --restart unless-stopped \
-  "$IMAGE" >/dev/null
+  "$IMAGE" \
+  --width "${GI_CAMERA_WIDTH:-1280}" \
+  --height "${GI_CAMERA_HEIGHT:-720}" \
+  --cam-fps "${GI_CAMERA_FPS:-30}" >/dev/null
 
 for _ in $(seq 1 150); do
   if curl -fsS --max-time 2 "http://127.0.0.1:$PORT/status.json" >/dev/null; then

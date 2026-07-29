@@ -3,8 +3,9 @@
 This runbook deploys two selectable ROS 2 pipelines in one viewer:
 
 1. InstinctSAM native text/point/box tracking.
-2. InstinctSAM first-frame text detection followed by TV5M FP16 SAM2 TensorRT
-   tracking, with additional point/box prompts handled directly by SAM2.
+2. InstinctSAM first-frame text detection followed by selectable TV5M, TV11M,
+   or TV21M FP16 SAM2 TensorRT tracking, with additional point/box prompts
+   handled directly by SAM2.
 
 General Instinct artifacts stay under `~/vendor` and never enter Git.
 
@@ -165,10 +166,10 @@ export GI_RESEARCH_USE_ACK=research-evaluation-only
 bash scripts/thor_start_unified_desktop.sh
 ```
 
-This starts the GI container in the background while ROS loads the TV5M SAM2
-engine. If the GI service is already healthy, it is reused instead of being
-restarted. Both models remain resident, so mode 2 only performs first-frame
-detection and state transfer rather than loading either model on demand.
+This starts the GI container in the background while ROS loads the default
+TV5M SAM2 engine. If the GI service is already healthy, it is reused instead
+of being restarted. GI and the selected SAM2 model remain resident, so mode 2
+only performs first-frame detection and state transfer during normal tracking.
 
 The launcher reads `DISPLAY`, `XAUTHORITY`, and `XDG_RUNTIME_DIR` from the
 logged-in GNOME session. Do not assume `DISPLAY=:0`; it was `:1` during the
@@ -181,8 +182,11 @@ press `2` to return to the lower-power capture/hybrid path.
 Controls:
 
 - `1`: native General Instinct SAM3/SAM3.1 tracking.
-- `2`: GI first-frame text detection followed by TV5M SAM2 TensorRT.
+- `2`: GI first-frame text detection followed by the selected SAM2 TensorRT.
 - `t`: enter a text prompt for the active mode.
+- `m`: open the SAM2 model menu; choose `1`=TV5M, `2`=TV11M, or `3`=TV21M.
+- `c`: open the camera profile menu; choose `1`=640x360@30,
+  `2`=848x480@30, `3`=1280x720@30, or `4`=1280x720@60.
 - mouse single-click: positive point prompt in either mode.
 - mouse drag: box prompt in either mode.
 - `[` / `]`: select the previous/next display preset: 1280x720,
@@ -197,9 +201,24 @@ together. Both modes are normalized to one 1280x720 interaction canvas before
 rendering (the native GI overlay is 1280x720 while the SAM2 preview is
 640x360), and the GUI performs only the final display scaling. This keeps text
 at the same visual size when switching modes. Mouse callbacks are returned in
-the shared canvas/source coordinates, so point/box prompts remain aligned at
-every display size.
+the shared canvas coordinates and converted once to the active camera
+coordinates, so point/box prompts remain aligned at every display size and
+camera profile.
 Override the initial preset selection with `display_max_width:=WIDTH`.
+
+The model menu keeps only one SAM2 tracker resident. A switch constructs and
+validates the replacement TensorRT tracker before atomically replacing the
+current tracker, then clears tracking state. This avoids triplicating the
+large prompt/track contexts shared by all three TinyViT encoders. The UI stays
+responsive and reports the measured load time.
+
+The camera menu is different from the display-size presets. It changes the
+actual capture request, restarts the licensed GI container using its public
+entrypoint arguments, restores the active pipeline mode, verifies the returned
+JPEG dimensions, and resets tracking. The TensorRT cache volume is retained,
+but GI model loading makes a camera switch substantially slower than a window
+resize or SAM2 model switch. The UI maps its 1280x720 interaction canvas back
+to the active camera pixels before sending point/box prompts.
 
 Mode 1 keeps the vendor FPS watermark at the top-left and places only our mode
 and action status at the bottom. Mode 2 draws our model latency/FPS/backend

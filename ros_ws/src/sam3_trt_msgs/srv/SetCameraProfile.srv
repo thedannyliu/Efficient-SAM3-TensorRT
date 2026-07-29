@@ -1,0 +1,10 @@
+uint32 width
+uint32 height
+float32 fps
+---
+bool success
+uint32 actual_width
+uint32 actual_height
+float32 requested_fps
+float64 switch_ms
+string message
