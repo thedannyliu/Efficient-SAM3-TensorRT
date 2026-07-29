@@ -32,6 +32,8 @@ class InteractiveViewer(Node):
         super().__init__("sam3_trt_interactive_viewer")
         self.declare_parameter("display_max_width", 2560)
         self.declare_parameter("display_fps", 60.0)
+        self.declare_parameter("render_width", 848)
+        self.declare_parameter("render_height", 480)
         self.declare_parameter("opengl_view", False)
         self.declare_parameter("shared_view_poll_hz", 120.0)
         self.declare_parameter("smooth_camera_view", True)
@@ -45,7 +47,10 @@ class InteractiveViewer(Node):
         )
         self.mode = 1
         self.bridge = CvBridge()
-        self.canvas_size = (1280, 720)
+        self.canvas_size = (
+            int(self.get_parameter("render_width").value),
+            int(self.get_parameter("render_height").value),
+        )
         self.source_sizes = {0: (1280, 720), 1: (1280, 720)}
         self.frames: dict[int, object] = {}
         self.frame_versions = {0: 0, 1: 0, 2: 0}

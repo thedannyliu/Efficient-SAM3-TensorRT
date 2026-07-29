@@ -18,6 +18,8 @@ def generate_launch_description() -> LaunchDescription:
     pipeline_overlap_max_objects = LaunchConfiguration(
         "pipeline_overlap_max_objects"
     )
+    render_height = LaunchConfiguration("render_height")
+    render_width = LaunchConfiguration("render_width")
     shared_memory_poll_hz = LaunchConfiguration("shared_memory_poll_hz")
     shared_view_poll_hz = LaunchConfiguration("shared_view_poll_hz")
     smooth_camera_view = LaunchConfiguration("smooth_camera_view")
@@ -46,6 +48,8 @@ def generate_launch_description() -> LaunchDescription:
             DeclareLaunchArgument(
                 "pipeline_overlap_max_objects", default_value="1"
             ),
+            DeclareLaunchArgument("render_height", default_value="480"),
+            DeclareLaunchArgument("render_width", default_value="848"),
             DeclareLaunchArgument("shared_memory_poll_hz", default_value="240.0"),
             DeclareLaunchArgument("shared_view_poll_hz", default_value="120.0"),
             DeclareLaunchArgument("smooth_camera_view", default_value="true"),
@@ -136,11 +140,20 @@ def generate_launch_description() -> LaunchDescription:
                             display_fps, value_type=float
                         ),
                         "display_max_width": display_max_width,
+                        "render_height": ParameterValue(
+                            render_height, value_type=int
+                        ),
+                        "render_width": ParameterValue(
+                            render_width, value_type=int
+                        ),
                         "opengl_view": ParameterValue(
                             opengl_view, value_type=bool
                         ),
                         "shared_memory_path": (
                             "/dev/shm/sam3_sam2_frame.bin"
+                        ),
+                        "shared_view_poll_hz": ParameterValue(
+                            shared_view_poll_hz, value_type=float
                         ),
                         "smooth_camera_view": ParameterValue(
                             smooth_camera_view, value_type=bool
