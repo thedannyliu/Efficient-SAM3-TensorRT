@@ -9,10 +9,15 @@ from launch_ros.parameter_descriptions import ParameterValue
 def generate_launch_description() -> LaunchDescription:
     bundle_dir = LaunchConfiguration("bundle_dir")
     base_url = LaunchConfiguration("base_url")
+    display_fps = LaunchConfiguration("display_fps")
     display_max_width = LaunchConfiguration("display_max_width")
     default_mode = LaunchConfiguration("default_mode")
     pipeline_overlap = LaunchConfiguration("pipeline_overlap")
+    pipeline_overlap_max_objects = LaunchConfiguration(
+        "pipeline_overlap_max_objects"
+    )
     shared_memory_poll_hz = LaunchConfiguration("shared_memory_poll_hz")
+    smooth_camera_view = LaunchConfiguration("smooth_camera_view")
     track_concurrency = LaunchConfiguration("track_concurrency")
     viewer = LaunchConfiguration("viewer")
     return LaunchDescription(
@@ -27,10 +32,15 @@ def generate_launch_description() -> LaunchDescription:
             DeclareLaunchArgument(
                 "base_url", default_value="http://127.0.0.1:8767"
             ),
+            DeclareLaunchArgument("display_fps", default_value="60.0"),
             DeclareLaunchArgument("display_max_width", default_value="2560"),
             DeclareLaunchArgument("default_mode", default_value="2"),
             DeclareLaunchArgument("pipeline_overlap", default_value="false"),
+            DeclareLaunchArgument(
+                "pipeline_overlap_max_objects", default_value="1"
+            ),
             DeclareLaunchArgument("shared_memory_poll_hz", default_value="240.0"),
+            DeclareLaunchArgument("smooth_camera_view", default_value="true"),
             DeclareLaunchArgument("track_concurrency", default_value="4"),
             DeclareLaunchArgument("viewer", default_value="true"),
             Node(
@@ -95,6 +105,9 @@ def generate_launch_description() -> LaunchDescription:
                         "pipeline_overlap": ParameterValue(
                             pipeline_overlap, value_type=bool
                         ),
+                        "pipeline_overlap_max_objects": ParameterValue(
+                            pipeline_overlap_max_objects, value_type=int
+                        ),
                         "queue_policy": "latest",
                     }
                 ],
@@ -103,7 +116,20 @@ def generate_launch_description() -> LaunchDescription:
                 package="sam3_trt_ros",
                 executable="interactive_viewer",
                 output="screen",
-                parameters=[{"display_max_width": display_max_width}],
+                parameters=[
+                    {
+                        "display_fps": ParameterValue(
+                            display_fps, value_type=float
+                        ),
+                        "display_max_width": display_max_width,
+                        "shared_memory_path": (
+                            "/dev/shm/sam3_sam2_frame.bin"
+                        ),
+                        "smooth_camera_view": ParameterValue(
+                            smooth_camera_view, value_type=bool
+                        ),
+                    }
+                ],
                 condition=IfCondition(viewer),
             ),
         ]

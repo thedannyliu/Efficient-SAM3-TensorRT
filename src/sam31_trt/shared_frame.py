@@ -84,3 +84,52 @@ class SharedFrameWriter:
         if self.file_descriptor >= 0:
             os.close(self.file_descriptor)
             self.file_descriptor = -1
+
+
+class SharedFrameReader:
+    def __init__(self, path: str | Path) -> None:
+        self.path = Path(path)
+        self.file_descriptor = os.open(self.path, os.O_RDONLY)
+        self.sequence = 0
+
+    def read_latest(self) -> tuple[int, int, np.ndarray | None]:
+        fcntl.flock(self.file_descriptor, fcntl.LOCK_SH)
+        try:
+            header = os.pread(self.file_descriptor, HEADER.size, 0)
+            if len(header) != HEADER.size:
+                return self.sequence, 0, None
+            (
+                magic,
+                sequence,
+                stamp_ns,
+                width,
+                height,
+                stride,
+                payload_bytes,
+            ) = HEADER.unpack(header)
+            if (
+                magic != MAGIC
+                or sequence == self.sequence
+                or width < 1
+                or height < 1
+                or stride < width * 3
+                or payload_bytes != stride * height
+                or payload_bytes > 64 * 1024 * 1024
+            ):
+                return self.sequence, stamp_ns, None
+            payload = os.pread(
+                self.file_descriptor, payload_bytes, HEADER.size
+            )
+        finally:
+            fcntl.flock(self.file_descriptor, fcntl.LOCK_UN)
+        if len(payload) != payload_bytes:
+            return self.sequence, stamp_ns, None
+        rows = np.frombuffer(payload, dtype=np.uint8).reshape(height, stride)
+        frame = rows[:, : width * 3].reshape(height, width, 3)
+        self.sequence = sequence
+        return sequence, stamp_ns, frame
+
+    def close(self) -> None:
+        if self.file_descriptor >= 0:
+            os.close(self.file_descriptor)
+            self.file_descriptor = -1

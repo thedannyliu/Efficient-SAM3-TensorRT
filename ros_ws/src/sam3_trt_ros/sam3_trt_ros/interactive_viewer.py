@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import json
+from collections import deque
 from time import perf_counter
 
 import cv2
+import numpy as np
 import rclpy
 from cv_bridge import CvBridge
 from rclpy.executors import SingleThreadedExecutor
@@ -14,6 +16,7 @@ from std_msgs.msg import String, UInt8
 from std_srvs.srv import Trigger
 
 from sam2_trt_msgs.srv import SwitchModel
+from sam31_trt.shared_frame import SharedFrameReader
 from sam3_trt_msgs.srv import (
     AddBox,
     AddPoint,
@@ -27,6 +30,11 @@ class InteractiveViewer(Node):
     def __init__(self) -> None:
         super().__init__("sam3_trt_interactive_viewer")
         self.declare_parameter("display_max_width", 2560)
+        self.declare_parameter("display_fps", 60.0)
+        self.declare_parameter("smooth_camera_view", True)
+        self.declare_parameter(
+            "shared_memory_path", "/dev/shm/sam3_sam2_frame.bin"
+        )
         self.declare_parameter("confidence", 0.5)
         self.declare_parameter(
             "sam2_bundle_root",
@@ -38,6 +46,9 @@ class InteractiveViewer(Node):
         self.source_sizes = {0: (1280, 720), 1: (1280, 720)}
         self.frames: dict[int, object] = {}
         self.frame_versions = {0: 0, 1: 0, 2: 0}
+        self.label_version = 0
+        self.label_mask = None
+        self.label_colors = None
         self.last_render_state: object = None
         self.window_initialized = False
         self.window_presets = [
@@ -90,6 +101,24 @@ class InteractiveViewer(Node):
         ]
         self.active_camera_profile = (1280, 720, 30)
         self.camera_observed_fps = 0.0
+        self.smooth_camera_view = bool(
+            self.get_parameter("smooth_camera_view").value
+        )
+        self.shared_memory_path = str(
+            self.get_parameter("shared_memory_path").value
+        )
+        self.shared_reader: SharedFrameReader | None = None
+        self.shared_reader_retry_time = 0.0
+        self.display_fps = float(self.get_parameter("display_fps").value)
+        if self.display_fps <= 0.0:
+            raise ValueError("display_fps must be positive")
+        self.display_period = 1.0 / self.display_fps
+        self.next_display_time = perf_counter()
+        self.render_times: deque[float] = deque(maxlen=240)
+        self.raw_frame_times: deque[float] = deque(maxlen=240)
+        self.render_fps = 0.0
+        self.raw_view_fps = 0.0
+        self.last_render_metrics_time = 0.0
         self.display_max_width = int(self.get_parameter("display_max_width").value)
         self.preset_index = min(
             range(len(self.window_presets)),
@@ -110,17 +139,28 @@ class InteractiveViewer(Node):
             lambda message: self.on_image(1, message),
             qos_profile_sensor_data,
         )
-        self.create_subscription(
-            Image,
-            "/sam/preview",
-            lambda message: self.on_image(2, message),
-            qos_profile_sensor_data,
-        )
+        if self.smooth_camera_view:
+            self.create_subscription(
+                Image,
+                "/sam/preview_labels",
+                self.on_preview_labels,
+                qos_profile_sensor_data,
+            )
+        else:
+            self.create_subscription(
+                Image,
+                "/sam/preview",
+                lambda message: self.on_image(2, message),
+                qos_profile_sensor_data,
+            )
         self.create_subscription(
             String,
             "/instinctsam/result_json",
             lambda message: self.on_result(1, message),
             10,
+        )
+        self.render_metrics_publisher = self.create_publisher(
+            String, "/sam3_viewer/render_metrics", 10
         )
         self.create_subscription(
             String,
@@ -198,6 +238,60 @@ class InteractiveViewer(Node):
                     break
         except json.JSONDecodeError:
             pass
+
+    def on_preview_labels(self, message: Image) -> None:
+        labels = self.bridge.imgmsg_to_cv2(
+            message, desired_encoding="mono8"
+        )
+        if (labels.shape[1], labels.shape[0]) != self.canvas_size:
+            labels = cv2.resize(
+                labels, self.canvas_size, interpolation=cv2.INTER_NEAREST
+            )
+        colors = np.zeros((*labels.shape, 3), dtype=np.uint8)
+        palette = (
+            (0, 255, 0),
+            (0, 128, 255),
+            (255, 128, 0),
+            (255, 0, 255),
+        )
+        for object_id in np.unique(labels):
+            if object_id == 0:
+                continue
+            colors[labels == object_id] = palette[(int(object_id) - 1) % 4]
+        self.label_mask = labels != 0
+        self.label_colors = colors
+        self.label_version += 1
+
+    def update_shared_frame(self) -> None:
+        now = perf_counter()
+        if self.shared_reader is None:
+            if now < self.shared_reader_retry_time:
+                return
+            try:
+                self.shared_reader = SharedFrameReader(
+                    self.shared_memory_path
+                )
+            except OSError:
+                self.shared_reader_retry_time = now + 1.0
+                return
+        try:
+            _, _, rgb = self.shared_reader.read_latest()
+        except OSError:
+            self.shared_reader.close()
+            self.shared_reader = None
+            self.shared_reader_retry_time = now + 1.0
+            return
+        if rgb is None:
+            return
+        frame = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+        self.source_sizes[2] = (frame.shape[1], frame.shape[0])
+        if (frame.shape[1], frame.shape[0]) != self.canvas_size:
+            frame = cv2.resize(
+                frame, self.canvas_size, interpolation=cv2.INTER_LINEAR
+            )
+        self.frames[2] = frame
+        self.frame_versions[2] += 1
+        self.raw_frame_times.append(now)
 
     def on_mode(self, message: UInt8) -> None:
         self.mode = int(message.data)
@@ -517,6 +611,21 @@ class InteractiveViewer(Node):
             rclpy.shutdown()
 
     def display(self) -> None:
+        smooth_mode = self.smooth_camera_view and self.mode == 2
+        now = perf_counter()
+        if smooth_mode:
+            if now < self.next_display_time:
+                self.handle_key(cv2.waitKeyEx(1))
+                return
+            missed_periods = max(
+                0, int((now - self.next_display_time) / self.display_period)
+            )
+            self.next_display_time += (
+                missed_periods + 1
+            ) * self.display_period
+            self.update_shared_frame()
+        else:
+            self.next_display_time = now
         if self.frame is None:
             self.handle_key(cv2.waitKeyEx(1))
             return
@@ -537,12 +646,22 @@ class InteractiveViewer(Node):
             self.text,
             self.drag_start,
             self.drag_current,
+            self.label_version,
         )
-        if render_state == self.last_render_state:
+        if render_state == self.last_render_state and not smooth_mode:
             self.handle_key(cv2.waitKeyEx(1))
             return
         self.last_render_state = render_state
         rendered = self.frame.copy()
+        if (
+            smooth_mode
+            and self.label_mask is not None
+            and self.label_colors is not None
+        ):
+            rendered[self.label_mask] = (
+                rendered[self.label_mask].astype(np.float32) * 0.55
+                + self.label_colors[self.label_mask].astype(np.float32) * 0.45
+            ).astype(np.uint8)
         if self.drag_start is not None and self.drag_current is not None:
             cv2.rectangle(
                 rendered,
@@ -605,6 +724,11 @@ class InteractiveViewer(Node):
                 metric_parts.append(str(backend))
             if metric_parts:
                 lines.append(" | ".join(metric_parts))
+            if self.render_fps > 0.0:
+                lines.append(
+                    f"render {self.render_fps:.1f} FPS"
+                    f" | raw {self.raw_view_fps:.1f} FPS"
+                )
         first_line_y = (
             rendered.shape[0] - 12 - (len(lines) - 1) * 28
             if self.mode == SetPipelineMode.Request.INSTINCTSAM
@@ -622,11 +746,54 @@ class InteractiveViewer(Node):
                 cv2.LINE_AA,
             )
         cv2.imshow(self.window_name, rendered)
+        render_time = perf_counter()
+        self.render_times.append(render_time)
+        self.publish_render_metrics(render_time)
         if not self.window_initialized:
             width, height = self.window_presets[self.preset_index]
             cv2.resizeWindow(self.window_name, width, height)
             self.window_initialized = True
         self.handle_key(cv2.waitKeyEx(1))
+
+    @staticmethod
+    def cadence(times: deque[float]) -> dict[str, float]:
+        if len(times) < 2:
+            return {}
+        intervals = np.diff(np.asarray(times, dtype=np.float64)) * 1000.0
+        return {
+            "fps": 1000.0 / float(intervals.mean()),
+            "interval_mean_ms": float(intervals.mean()),
+            "interval_std_ms": float(intervals.std()),
+            "interval_p95_ms": float(np.percentile(intervals, 95)),
+            "interval_p99_ms": float(np.percentile(intervals, 99)),
+            "interval_max_ms": float(intervals.max()),
+        }
+
+    def publish_render_metrics(self, now: float) -> None:
+        render = self.cadence(self.render_times)
+        raw = self.cadence(self.raw_frame_times)
+        self.render_fps = render.get("fps", 0.0)
+        self.raw_view_fps = raw.get("fps", 0.0)
+        if now - self.last_render_metrics_time < 1.0 or not render:
+            return
+        value = {
+            "schema_version": 1,
+            "mode": self.mode,
+            "smooth_camera_view": self.smooth_camera_view,
+            "target_display_fps": self.display_fps,
+            "render": render,
+            "raw_unique_frames": raw,
+        }
+        message = String()
+        message.data = json.dumps(value, separators=(",", ":"))
+        self.render_metrics_publisher.publish(message)
+        self.last_render_metrics_time = now
+
+    def destroy_node(self) -> bool:
+        if self.shared_reader is not None:
+            self.shared_reader.close()
+            self.shared_reader = None
+        return super().destroy_node()
 
 
 def main() -> None:

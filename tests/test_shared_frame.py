@@ -8,7 +8,12 @@ import unittest
 
 import numpy as np
 
-from sam31_trt.shared_frame import HEADER, MAGIC, SharedFrameWriter
+from sam31_trt.shared_frame import (
+    HEADER,
+    MAGIC,
+    SharedFrameReader,
+    SharedFrameWriter,
+)
 
 
 class SharedFrameWriterTest(unittest.TestCase):
@@ -54,6 +59,22 @@ class SharedFrameWriterTest(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "shared buffer"):
                     writer.write(np.zeros((2, 2, 3), dtype=np.uint8), 1)
             finally:
+                writer.close()
+
+    def test_reader_returns_each_sequence_once(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "frame.bin"
+            writer = SharedFrameWriter(path, 1024)
+            reader = SharedFrameReader(path)
+            try:
+                expected = np.arange(60, dtype=np.uint8).reshape(4, 5, 3)
+                writer.write(expected, 123)
+                sequence, stamp_ns, frame = reader.read_latest()
+                self.assertEqual((sequence, stamp_ns), (1, 123))
+                np.testing.assert_array_equal(frame, expected)
+                self.assertEqual(reader.read_latest(), (1, 123, None))
+            finally:
+                reader.close()
                 writer.close()
 
 
