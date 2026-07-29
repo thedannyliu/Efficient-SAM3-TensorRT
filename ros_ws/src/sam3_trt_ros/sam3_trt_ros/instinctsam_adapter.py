@@ -93,6 +93,14 @@ class InstinctSAMAdapter(Node):
         self.relay_gated = False
         self.mode_received = False
         self.vendor_ready = False
+        self.published_frames = 0
+        self.rate_time = perf_counter()
+        self.rate_reader_sequence = 0
+        self.rate_published_frames = 0
+        self.raw_reader_fps = 0.0
+        self.image_publish_fps = 0.0
+        self.image_copy_ms = 0.0
+        self.image_publish_ms = 0.0
         self.image_group = MutuallyExclusiveCallbackGroup()
         self.status_group = MutuallyExclusiveCallbackGroup()
         self.raw_publisher = self.create_publisher(
@@ -153,12 +161,21 @@ class InstinctSAMAdapter(Node):
         raw_sequence, raw = self.raw_reader.latest()
         if raw is not None and raw_sequence != self.last_raw_sequence:
             self.height, self.width = raw.shape[:2]
+            start = perf_counter()
             message = self.image_message(raw, stamp)
+            self.image_copy_ms = (perf_counter() - start) * 1000.0
+            start = perf_counter()
+            published = False
             if self.hybrid_enabled:
                 if not self.relay_gated:
                     self.relay_publisher.publish(message)
+                    published = True
             else:
                 self.raw_publisher.publish(message)
+                published = True
+            self.image_publish_ms = (perf_counter() - start) * 1000.0
+            if published:
+                self.published_frames += 1
             self.last_raw_sequence = raw_sequence
 
         if not self.hybrid_enabled:
@@ -178,6 +195,19 @@ class InstinctSAMAdapter(Node):
                 self.vendor_ready = True
                 self.update_readers()
                 self.get_logger().info("InstinctSAM API is ready")
+            raw_sequence, _ = self.raw_reader.latest()
+            now = perf_counter()
+            rate_duration = now - self.rate_time
+            if rate_duration >= 1.0:
+                self.raw_reader_fps = (
+                    raw_sequence - self.rate_reader_sequence
+                ) / rate_duration
+                self.image_publish_fps = (
+                    self.published_frames - self.rate_published_frames
+                ) / rate_duration
+                self.rate_time = now
+                self.rate_reader_sequence = raw_sequence
+                self.rate_published_frames = self.published_frames
             stamp = self.get_clock().now().to_msg()
             status.update(
                 {
@@ -186,6 +216,10 @@ class InstinctSAMAdapter(Node):
                     "source_width": self.width,
                     "source_height": self.height,
                     "adapter_poll_ms": (perf_counter() - start) * 1000.0,
+                    "raw_reader_fps": self.raw_reader_fps,
+                    "image_publish_fps": self.image_publish_fps,
+                    "image_copy_ms": self.image_copy_ms,
+                    "image_publish_ms": self.image_publish_ms,
                 }
             )
             message = String()
