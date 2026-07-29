@@ -1,4 +1,4 @@
-# SAM 3.1 TensorRT on PACE
+# Efficient SAM3 TensorRT
 
 This repository measures and optimizes Meta's native SAM 3.1 Object Multiplex
 pipeline before deployment to Jetson Thor. The acceptance threshold is a task
@@ -42,3 +42,24 @@ retention, model latency, effective FPS, GPU type, and peak CUDA memory.
 
 TensorRT engines must be rebuilt on the deployment GPU. PACE engines are
 benchmark artifacts and must not be copied to Jetson Thor.
+
+## Jetson Thor pipelines
+
+The repository also provides two ROS 2 integrations:
+
+- General Instinct InstinctSAM native text/geometry tracking.
+- First-frame InstinctSAM text detection followed by optimized TV5M FP16 SAM2
+  TensorRT tracking.
+
+The unified Thor viewer switches between them with `1` and `2`; the camera and
+models remain resident so switching does not require reloading an engine.
+
+General Instinct's container, weights, engines, and application are licensed
+and supplied separately. They are intentionally excluded from this repository.
+Read [THIRD_PARTY.md](THIRD_PARTY.md) and
+[docs/thor_deployment.md](docs/thor_deployment.md) before deployment.
+
+Thor performance claims require a completed
+[baseline record](docs/benchmarks/thor_baseline.md). Raw traces stay under the
+ignored `results/` directory, while lightweight summaries and each optimization
+delta are committed.
