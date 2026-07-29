@@ -64,6 +64,47 @@ class ModeManager(Node):
         message.data = self.active_mode
         self.mode_publisher.publish(message)
 
+    def publish_camera_profile(self, switch_ms: float = 0.0) -> None:
+        width, height, fps = self.camera_profile
+        message = String()
+        message.data = json.dumps(
+            {
+                "schema_version": 1,
+                "actual_width": width,
+                "actual_height": height,
+                "requested_fps": fps,
+                "switch_ms": switch_ms,
+            },
+            separators=(",", ":"),
+        )
+        self.camera_publisher.publish(message)
+
+    def read_container_camera_profile(self) -> tuple[int, int, float]:
+        completed = subprocess.run(
+            [
+                "docker",
+                "inspect",
+                "--format",
+                "{{json .Args}}",
+                "instinctsam-unified",
+            ],
+            text=True,
+            capture_output=True,
+            timeout=5,
+            check=True,
+        )
+        arguments = json.loads(completed.stdout)
+        values = {
+            arguments[index]: arguments[index + 1]
+            for index in range(0, len(arguments) - 1)
+            if arguments[index] in {"--width", "--height", "--cam-fps"}
+        }
+        return (
+            int(values["--width"]),
+            int(values["--height"]),
+            float(values["--cam-fps"]),
+        )
+
     def initialize_mode(self) -> None:
         if self.ready:
             return
@@ -76,6 +117,11 @@ class ModeManager(Node):
             )
             return
         self.ready = True
+        try:
+            self.camera_profile = self.read_container_camera_profile()
+        except Exception as error:
+            self.get_logger().warning(f"cannot read camera profile: {error}")
+        self.publish_camera_profile()
         self.publish_mode()
         self.get_logger().info(f"active pipeline mode is {self.active_mode}")
 
@@ -175,19 +221,8 @@ class ModeManager(Node):
                 raise RuntimeError("restarted camera did not return a valid frame")
             actual_height, actual_width = frame.shape[:2]
             switch_ms = (perf_counter() - start) * 1000.0
-            self.camera_profile = requested
-            result = {
-                "schema_version": 1,
-                "requested_width": requested[0],
-                "requested_height": requested[1],
-                "requested_fps": requested[2],
-                "actual_width": actual_width,
-                "actual_height": actual_height,
-                "switch_ms": switch_ms,
-            }
-            message = String()
-            message.data = json.dumps(result, separators=(",", ":"))
-            self.camera_publisher.publish(message)
+            self.camera_profile = (actual_width, actual_height, requested[2])
+            self.publish_camera_profile(switch_ms)
             response.success = True
             response.actual_width = actual_width
             response.actual_height = actual_height

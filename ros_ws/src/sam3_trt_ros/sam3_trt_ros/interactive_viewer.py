@@ -130,6 +130,12 @@ class InteractiveViewer(Node):
         self.create_subscription(
             UInt8, "/sam3_pipeline/active_mode", self.on_mode, mode_qos
         )
+        self.create_subscription(
+            String,
+            "/sam3_pipeline/camera_profile_json",
+            self.on_camera_profile,
+            mode_qos,
+        )
         self.text_clients = {
             1: self.create_client(SetTextPrompt, "/instinctsam/set_text"),
             2: self.create_client(SetTextPrompt, "/hybrid/set_text"),
@@ -199,6 +205,19 @@ class InteractiveViewer(Node):
             if self.mode == 1
             else f"mode 2: GI detection -> {self.active_model} SAM2 TensorRT"
         )
+
+    def on_camera_profile(self, message: String) -> None:
+        try:
+            value = json.loads(message.data)
+            self.active_camera_profile = (
+                int(value["actual_width"]),
+                int(value["actual_height"]),
+                int(round(float(value["requested_fps"]))),
+            )
+            self.source_sizes[0] = self.active_camera_profile[:2]
+            self.source_sizes[1] = self.active_camera_profile[:2]
+        except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+            return
 
     def to_source(self, x: int, y: int) -> tuple[float, float]:
         if self.mode == SetPipelineMode.Request.HYBRID:
