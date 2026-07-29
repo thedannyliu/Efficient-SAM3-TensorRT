@@ -119,6 +119,7 @@ class InteractiveViewer(Node):
         self.render_fps = 0.0
         self.raw_view_fps = 0.0
         self.last_render_metrics_time = 0.0
+        self.stage_ms: dict[str, float] = {}
         self.display_max_width = int(self.get_parameter("display_max_width").value)
         self.preset_index = min(
             range(len(self.window_presets)),
@@ -611,6 +612,7 @@ class InteractiveViewer(Node):
             rclpy.shutdown()
 
     def display(self) -> None:
+        display_start = perf_counter()
         smooth_mode = self.smooth_camera_view and self.mode == 2
         now = perf_counter()
         if smooth_mode:
@@ -623,7 +625,11 @@ class InteractiveViewer(Node):
             self.next_display_time += (
                 missed_periods + 1
             ) * self.display_period
+            shared_start = perf_counter()
             self.update_shared_frame()
+            self.stage_ms["shared_read"] = (
+                perf_counter() - shared_start
+            ) * 1000.0
         else:
             self.next_display_time = now
         if self.frame is None:
@@ -652,6 +658,7 @@ class InteractiveViewer(Node):
             self.handle_key(cv2.waitKeyEx(1))
             return
         self.last_render_state = render_state
+        compose_start = perf_counter()
         rendered = self.frame.copy()
         if (
             smooth_mode
@@ -745,15 +752,28 @@ class InteractiveViewer(Node):
                 2,
                 cv2.LINE_AA,
             )
+        self.stage_ms["compose"] = (
+            perf_counter() - compose_start
+        ) * 1000.0
+        imshow_start = perf_counter()
         cv2.imshow(self.window_name, rendered)
         render_time = perf_counter()
+        self.stage_ms["imshow"] = (render_time - imshow_start) * 1000.0
+        self.stage_ms["display_total"] = (
+            render_time - display_start
+        ) * 1000.0
         self.render_times.append(render_time)
         self.publish_render_metrics(render_time)
         if not self.window_initialized:
             width, height = self.window_presets[self.preset_index]
             cv2.resizeWindow(self.window_name, width, height)
             self.window_initialized = True
-        self.handle_key(cv2.waitKeyEx(1))
+        wait_start = perf_counter()
+        key = cv2.waitKeyEx(1)
+        self.stage_ms["wait_key"] = (
+            perf_counter() - wait_start
+        ) * 1000.0
+        self.handle_key(key)
 
     @staticmethod
     def cadence(times: deque[float]) -> dict[str, float]:
@@ -783,6 +803,7 @@ class InteractiveViewer(Node):
             "target_display_fps": self.display_fps,
             "render": render,
             "raw_unique_frames": raw,
+            "stage_ms": self.stage_ms,
         }
         message = String()
         message.data = json.dumps(value, separators=(",", ":"))
