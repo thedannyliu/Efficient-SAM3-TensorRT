@@ -8,6 +8,8 @@ import cv2
 import numpy as np
 import rclpy
 from cv_bridge import CvBridge
+from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
+from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, qos_profile_sensor_data
 from sensor_msgs.msg import Image
@@ -24,7 +26,6 @@ class MjpegReader:
         self.lock = Lock()
         self.stop = Event()
         self.enabled = Event()
-        self.enabled.set()
         self.frame: np.ndarray | None = None
         self.sequence = 0
         self.capture: cv2.VideoCapture | None = None
@@ -73,7 +74,8 @@ class InstinctSAMAdapter(Node):
     def __init__(self) -> None:
         super().__init__("instinctsam_adapter")
         self.declare_parameter("base_url", "http://127.0.0.1:8767")
-        self.declare_parameter("poll_fps", 20.0)
+        self.declare_parameter("poll_fps", 60.0)
+        self.declare_parameter("status_fps", 5.0)
         self.declare_parameter("http_timeout", 1.0)
         self.declare_parameter("relay_topic", "/hybrid/camera/image_raw")
         base_url = str(self.get_parameter("base_url").value)
@@ -89,6 +91,10 @@ class InstinctSAMAdapter(Node):
         self.height = 0
         self.hybrid_enabled = False
         self.relay_gated = False
+        self.mode_received = False
+        self.vendor_ready = False
+        self.image_group = MutuallyExclusiveCallbackGroup()
+        self.status_group = MutuallyExclusiveCallbackGroup()
         self.raw_publisher = self.create_publisher(
             Image, "/instinctsam/raw", qos_profile_sensor_data
         )
@@ -117,7 +123,17 @@ class InstinctSAMAdapter(Node):
             UInt8, "/sam3_pipeline/active_mode", self.on_mode, mode_qos
         )
         poll_fps = float(self.get_parameter("poll_fps").value)
-        self.create_timer(1.0 / poll_fps, self.poll)
+        status_fps = float(self.get_parameter("status_fps").value)
+        self.create_timer(
+            1.0 / poll_fps,
+            self.poll_images,
+            callback_group=self.image_group,
+        )
+        self.create_timer(
+            1.0 / status_fps,
+            self.poll_status,
+            callback_group=self.status_group,
+        )
         self.get_logger().info(f"bridging InstinctSAM at {base_url}")
 
     def image_message(self, frame: np.ndarray, stamp: object) -> Image:
@@ -125,32 +141,44 @@ class InstinctSAMAdapter(Node):
         message.header.stamp = stamp
         return message
 
-    def poll(self) -> None:
-        start = perf_counter()
-        try:
-            stamp = self.get_clock().now().to_msg()
-            raw_sequence, raw = self.raw_reader.latest()
-            overlay_sequence, overlay = self.overlay_reader.latest()
-            if raw is None or overlay is None:
-                raise RuntimeError("waiting for InstinctSAM MJPEG streams")
-            if (
-                raw_sequence == self.last_raw_sequence
-                and overlay_sequence == self.last_overlay_sequence
-            ):
-                return
-            status = self.client.status()
+    def update_readers(self) -> None:
+        enabled = self.vendor_ready and self.mode_received
+        self.raw_reader.set_enabled(enabled)
+        self.overlay_reader.set_enabled(enabled and not self.hybrid_enabled)
+
+    def poll_images(self) -> None:
+        if not self.vendor_ready or not self.mode_received:
+            return
+        stamp = self.get_clock().now().to_msg()
+        raw_sequence, raw = self.raw_reader.latest()
+        if raw is not None and raw_sequence != self.last_raw_sequence:
             self.height, self.width = raw.shape[:2]
-            if raw_sequence != self.last_raw_sequence:
-                message = self.image_message(raw, stamp)
-                if self.hybrid_enabled:
-                    if not self.relay_gated:
-                        self.relay_publisher.publish(message)
-                else:
-                    self.raw_publisher.publish(message)
-                self.last_raw_sequence = raw_sequence
-            if overlay_sequence != self.last_overlay_sequence:
+            message = self.image_message(raw, stamp)
+            if self.hybrid_enabled:
+                if not self.relay_gated:
+                    self.relay_publisher.publish(message)
+            else:
+                self.raw_publisher.publish(message)
+            self.last_raw_sequence = raw_sequence
+
+        if not self.hybrid_enabled:
+            overlay_sequence, overlay = self.overlay_reader.latest()
+            if (
+                overlay is not None
+                and overlay_sequence != self.last_overlay_sequence
+            ):
                 self.overlay_publisher.publish(self.image_message(overlay, stamp))
                 self.last_overlay_sequence = overlay_sequence
+
+    def poll_status(self) -> None:
+        start = perf_counter()
+        try:
+            status = self.client.status()
+            if not self.vendor_ready:
+                self.vendor_ready = True
+                self.update_readers()
+                self.get_logger().info("InstinctSAM API is ready")
+            stamp = self.get_clock().now().to_msg()
             status.update(
                 {
                     "schema_version": 1,
@@ -164,8 +192,11 @@ class InstinctSAMAdapter(Node):
             message.data = json.dumps(status, separators=(",", ":"))
             self.result_publisher.publish(message)
         except Exception as error:
+            if self.vendor_ready:
+                self.vendor_ready = False
+                self.update_readers()
             self.get_logger().warning(
-                f"InstinctSAM poll failed: {error}",
+                f"waiting for InstinctSAM API: {error}",
                 throttle_duration_sec=2.0,
             )
 
@@ -194,7 +225,8 @@ class InstinctSAMAdapter(Node):
 
     def on_mode(self, message: UInt8) -> None:
         self.hybrid_enabled = message.data == 2
-        self.overlay_reader.set_enabled(not self.hybrid_enabled)
+        self.mode_received = True
+        self.update_readers()
 
     def on_set_hybrid_relay(
         self, request: SetBool.Request, response: SetBool.Response
@@ -260,11 +292,14 @@ class InstinctSAMAdapter(Node):
 def main() -> None:
     rclpy.init()
     node = InstinctSAMAdapter()
+    executor = MultiThreadedExecutor(num_threads=2)
+    executor.add_node(node)
     try:
-        rclpy.spin(node)
+        executor.spin()
     except KeyboardInterrupt:
         pass
     finally:
+        executor.shutdown()
         node.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()

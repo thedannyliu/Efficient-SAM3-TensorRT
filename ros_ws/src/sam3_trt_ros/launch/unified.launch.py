@@ -31,6 +31,8 @@ def generate_launch_description() -> LaunchDescription:
                 package="sam3_trt_ros",
                 executable="instinctsam_adapter",
                 output="screen",
+                respawn=True,
+                respawn_delay=2.0,
                 parameters=[{"base_url": base_url}],
             ),
             Node(
