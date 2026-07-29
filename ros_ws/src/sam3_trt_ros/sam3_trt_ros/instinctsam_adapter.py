@@ -17,6 +17,7 @@ from std_msgs.msg import String, UInt8
 from std_srvs.srv import SetBool, Trigger
 
 from sam31_trt.gi_client import InstinctSAMClient
+from sam31_trt.shared_frame import SharedFrameWriter
 from sam3_trt_msgs.srv import AddBox, AddPoint, SetTextPrompt
 
 
@@ -78,6 +79,8 @@ class InstinctSAMAdapter(Node):
         self.declare_parameter("status_fps", 5.0)
         self.declare_parameter("http_timeout", 1.0)
         self.declare_parameter("relay_topic", "/hybrid/camera/image_raw")
+        self.declare_parameter("shared_memory_path", "")
+        self.declare_parameter("shared_memory_max_bytes", 8 * 1024 * 1024)
         base_url = str(self.get_parameter("base_url").value)
         timeout = float(self.get_parameter("http_timeout").value)
         self.client = InstinctSAMClient(base_url, timeout=timeout)
@@ -85,6 +88,17 @@ class InstinctSAMAdapter(Node):
         self.bridge = CvBridge()
         self.raw_reader = MjpegReader(f"{base_url}/raw.mjpg")
         self.overlay_reader = MjpegReader(f"{base_url}/track.mjpg")
+        shared_memory_path = str(
+            self.get_parameter("shared_memory_path").value
+        )
+        self.shared_writer = (
+            SharedFrameWriter(
+                shared_memory_path,
+                int(self.get_parameter("shared_memory_max_bytes").value),
+            )
+            if shared_memory_path
+            else None
+        )
         self.last_raw_sequence = 0
         self.last_overlay_sequence = 0
         self.width = 0
@@ -162,15 +176,28 @@ class InstinctSAMAdapter(Node):
         if raw is not None and raw_sequence != self.last_raw_sequence:
             self.height, self.width = raw.shape[:2]
             start = perf_counter()
-            message = self.image_message(raw, stamp)
+            message = (
+                None
+                if self.hybrid_enabled and self.shared_writer is not None
+                else self.image_message(raw, stamp)
+            )
             self.image_copy_ms = (perf_counter() - start) * 1000.0
             start = perf_counter()
             published = False
             if self.hybrid_enabled:
                 if not self.relay_gated:
-                    self.relay_publisher.publish(message)
+                    if self.shared_writer is not None:
+                        stamp_ns = (
+                            int(stamp.sec) * 1_000_000_000
+                            + int(stamp.nanosec)
+                        )
+                        self.shared_writer.write(raw, stamp_ns)
+                    else:
+                        assert message is not None
+                        self.relay_publisher.publish(message)
                     published = True
             else:
+                assert message is not None
                 self.raw_publisher.publish(message)
                 published = True
             self.image_publish_ms = (perf_counter() - start) * 1000.0
@@ -220,6 +247,11 @@ class InstinctSAMAdapter(Node):
                     "image_publish_fps": self.image_publish_fps,
                     "image_copy_ms": self.image_copy_ms,
                     "image_publish_ms": self.image_publish_ms,
+                    "image_transport": (
+                        "shared_memory"
+                        if self.shared_writer is not None
+                        else "ros_image"
+                    ),
                 }
             )
             message = String()
@@ -255,6 +287,8 @@ class InstinctSAMAdapter(Node):
     def destroy_node(self) -> bool:
         self.raw_reader.close()
         self.overlay_reader.close()
+        if self.shared_writer is not None:
+            self.shared_writer.close()
         return super().destroy_node()
 
     def on_mode(self, message: UInt8) -> None:

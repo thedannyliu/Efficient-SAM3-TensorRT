@@ -33,7 +33,14 @@ def generate_launch_description() -> LaunchDescription:
                 output="screen",
                 respawn=True,
                 respawn_delay=2.0,
-                parameters=[{"base_url": base_url}],
+                parameters=[
+                    {
+                        "base_url": base_url,
+                        "shared_memory_path": (
+                            "/dev/shm/sam3_sam2_frame.bin"
+                        ),
+                    }
+                ],
             ),
             Node(
                 package="sam3_trt_ros",
@@ -69,6 +76,9 @@ def generate_launch_description() -> LaunchDescription:
                         "bundle_dir": bundle_dir,
                         "precision": "fp16",
                         "image_topic": "/hybrid/camera/image_raw",
+                        "shared_memory_path": (
+                            "/dev/shm/sam3_sam2_frame.bin"
+                        ),
                         "max_objects": 8,
                         "track_concurrency": 8,
                         "pipeline_overlap": False,
