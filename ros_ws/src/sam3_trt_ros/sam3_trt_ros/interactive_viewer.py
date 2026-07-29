@@ -8,7 +8,7 @@ import cv2
 import numpy as np
 import rclpy
 from cv_bridge import CvBridge
-from rclpy.executors import SingleThreadedExecutor
+from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, qos_profile_sensor_data
 from sensor_msgs.msg import Image
@@ -822,7 +822,7 @@ class InteractiveViewer(Node):
 def main() -> None:
     rclpy.init()
     node = InteractiveViewer()
-    executor = SingleThreadedExecutor()
+    executor = MultiThreadedExecutor(num_threads=2)
     executor.add_node(node)
     try:
         while rclpy.ok():
