@@ -26,7 +26,10 @@ class InstinctSAMAdapter(Node):
         base_url = str(self.get_parameter("base_url").value)
         timeout = float(self.get_parameter("http_timeout").value)
         self.client = InstinctSAMClient(base_url, timeout=timeout)
+        self.base_url = base_url
         self.bridge = CvBridge()
+        self.raw_capture = self.open_capture("raw.mjpg")
+        self.overlay_capture = self.open_capture("track.mjpg")
         self.width = 0
         self.height = 0
         self.raw_publisher = self.create_publisher(
@@ -47,12 +50,23 @@ class InstinctSAMAdapter(Node):
         self.create_timer(1.0 / poll_fps, self.poll)
         self.get_logger().info(f"bridging InstinctSAM at {base_url}")
 
-    @staticmethod
-    def decode_jpeg(encoded: bytes) -> np.ndarray:
-        frame = cv2.imdecode(np.frombuffer(encoded, dtype=np.uint8), cv2.IMREAD_COLOR)
-        if frame is None:
-            raise ValueError("InstinctSAM returned an invalid JPEG")
-        return frame
+    def open_capture(self, path: str) -> cv2.VideoCapture:
+        capture = cv2.VideoCapture(f"{self.base_url}/{path}")
+        capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        return capture
+
+    def read_capture(
+        self, capture: cv2.VideoCapture, path: str
+    ) -> tuple[cv2.VideoCapture, np.ndarray]:
+        ok, frame = capture.read()
+        if ok and frame is not None:
+            return capture, frame
+        capture.release()
+        capture = self.open_capture(path)
+        ok, frame = capture.read()
+        if not ok or frame is None:
+            raise RuntimeError(f"cannot read InstinctSAM /{path}")
+        return capture, frame
 
     def publish_frame(self, publisher: object, frame: np.ndarray, stamp: object) -> None:
         message = self.bridge.cv2_to_imgmsg(frame, encoding="bgr8")
@@ -63,8 +77,12 @@ class InstinctSAMAdapter(Node):
         start = perf_counter()
         try:
             stamp = self.get_clock().now().to_msg()
-            raw = self.decode_jpeg(self.client.raw_jpeg())
-            overlay = self.decode_jpeg(self.client.track_jpeg())
+            self.raw_capture, raw = self.read_capture(
+                self.raw_capture, "raw.mjpg"
+            )
+            self.overlay_capture, overlay = self.read_capture(
+                self.overlay_capture, "track.mjpg"
+            )
             status = self.client.status()
             self.height, self.width = raw.shape[:2]
             self.publish_frame(self.raw_publisher, raw, stamp)
@@ -104,6 +122,11 @@ class InstinctSAMAdapter(Node):
         except Exception as error:
             response.message = str(error)
         return response
+
+    def destroy_node(self) -> bool:
+        self.raw_capture.release()
+        self.overlay_capture.release()
+        return super().destroy_node()
 
     def on_add_box(
         self, request: AddBox.Request, response: AddBox.Response

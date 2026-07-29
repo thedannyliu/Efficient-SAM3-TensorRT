@@ -79,9 +79,8 @@ class InstinctSAMClient:
         return self._request("/track.jpg", expect_json=False)
 
     def set_prompt(self, text: str, confidence: float = 0.5) -> dict[str, Any]:
-        value = self._request(
-            "/prompt", {"text": text, "confidence": float(confidence)}
-        )
+        self._request("/thresh", {"detect": float(confidence)})
+        value = self._request("/prompt", {"text": text})
         return value if isinstance(value, dict) else {"response": value}
 
     def add_box(
@@ -89,7 +88,7 @@ class InstinctSAMClient:
     ) -> dict[str, Any]:
         value = self._request(
             "/add_box",
-            {"x0": float(x0), "y0": float(y0), "x1": float(x1), "y1": float(y1)},
+            {"box": [float(x0), float(y0), float(x1), float(y1)]},
         )
         return value if isinstance(value, dict) else {"response": value}
 

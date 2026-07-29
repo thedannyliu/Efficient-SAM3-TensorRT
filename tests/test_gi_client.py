@@ -10,6 +10,7 @@ from sam31_trt.gi_client import InstinctSAMClient, InstinctSAMError
 
 class Handler(BaseHTTPRequestHandler):
     last_request: dict[str, object] = {}
+    requests: list[tuple[str, dict[str, object]]] = []
 
     def log_message(self, *_: object) -> None:
         pass
@@ -26,8 +27,17 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         length = int(self.headers["Content-Length"])
         Handler.last_request = json.loads(self.rfile.read(length))
+        Handler.requests.append((self.path, Handler.last_request))
         if self.path == "/api/v1/mode":
             body = json.dumps({"mode": Handler.last_request["mode"]}).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        if self.path in {"/thresh", "/prompt", "/add_box"}:
+            body = b'{"ok":true}'
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))
@@ -89,6 +99,19 @@ class InstinctSAMClientTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "native or hybrid"):
             self.client.set_mode("invalid")
 
+    def test_vendor_prompt_and_box_payloads(self) -> None:
+        Handler.requests.clear()
+        self.client.set_prompt("monitor", 0.4)
+        self.client.add_box(0.1, 0.2, 0.8, 0.9)
+        self.assertEqual(
+            Handler.requests,
+            [
+                ("/thresh", {"detect": 0.4}),
+                ("/prompt", {"text": "monitor"}),
+                ("/add_box", {"box": [0.1, 0.2, 0.8, 0.9]}),
+            ],
+        )
+
     def test_http_error_is_contextual(self) -> None:
         with self.assertRaisesRegex(InstinctSAMError, "HTTP 404"):
-            self.client.set_prompt("monitor")
+            self.client.reset()
