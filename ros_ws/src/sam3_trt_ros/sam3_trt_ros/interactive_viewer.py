@@ -32,6 +32,7 @@ class InteractiveViewer(Node):
         super().__init__("sam3_trt_interactive_viewer")
         self.declare_parameter("display_max_width", 2560)
         self.declare_parameter("display_fps", 60.0)
+        self.declare_parameter("adaptive_display_fps", True)
         self.declare_parameter("render_width", 848)
         self.declare_parameter("render_height", 480)
         self.declare_parameter("opengl_view", False)
@@ -117,6 +118,10 @@ class InteractiveViewer(Node):
         self.shared_reader: SharedFrameReader | None = None
         self.shared_reader_retry_time = 0.0
         self.display_fps = float(self.get_parameter("display_fps").value)
+        self.adaptive_display_fps = bool(
+            self.get_parameter("adaptive_display_fps").value
+        )
+        self.active_display_fps = self.display_fps
         self.opengl_view = bool(self.get_parameter("opengl_view").value)
         self.shared_view_poll_hz = float(
             self.get_parameter("shared_view_poll_hz").value
@@ -482,7 +487,20 @@ class InteractiveViewer(Node):
             return
         future = client.call_async(Trigger.Request())
         future.add_done_callback(self.on_action_response)
+        self.metrics = {}
         self.status = "resetting"
+
+    def routed_display_fps(self) -> float:
+        if not self.adaptive_display_fps or self.mode != 2:
+            return self.display_fps
+        objects = self.metrics.get("objects", ())
+        object_count = len(objects) if isinstance(objects, list) else 0
+        if object_count <= 0:
+            return self.display_fps
+        return max(
+            5.0,
+            min(self.display_fps, 30.0, 36.0 / object_count),
+        )
 
     def set_mode(self, mode: int) -> None:
         if not self.mode_client.service_is_ready():
@@ -645,6 +663,11 @@ class InteractiveViewer(Node):
         smooth_mode = self.smooth_camera_view and self.mode == 2
         now = perf_counter()
         if smooth_mode:
+            active_display_fps = self.routed_display_fps()
+            if active_display_fps != self.active_display_fps:
+                self.active_display_fps = active_display_fps
+                self.display_period = 1.0 / active_display_fps
+                self.next_display_time = now
             if now < self.next_display_time:
                 sleep(min(self.next_display_time - now, 0.001))
                 return
@@ -826,6 +849,8 @@ class InteractiveViewer(Node):
             "smooth_camera_view": self.smooth_camera_view,
             "opengl_view": self.opengl_view,
             "target_display_fps": self.display_fps,
+            "active_display_fps": self.active_display_fps,
+            "adaptive_display_fps": self.adaptive_display_fps,
             "shared_view_poll_hz": self.shared_view_poll_hz,
             "render": render,
             "raw_unique_frames": raw,

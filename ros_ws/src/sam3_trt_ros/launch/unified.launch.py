@@ -7,6 +7,7 @@ from launch_ros.parameter_descriptions import ParameterValue
 
 
 def generate_launch_description() -> LaunchDescription:
+    adaptive_display_fps = LaunchConfiguration("adaptive_display_fps")
     bundle_dir = LaunchConfiguration("bundle_dir")
     base_url = LaunchConfiguration("base_url")
     display_fps = LaunchConfiguration("display_fps")
@@ -28,6 +29,9 @@ def generate_launch_description() -> LaunchDescription:
     return LaunchDescription(
         [
             DeclareLaunchArgument(
+                "adaptive_display_fps", default_value="true"
+            ),
+            DeclareLaunchArgument(
                 "bundle_dir",
                 default_value=(
                     "/home/ril-thor/Efficient-SAM2-TensorRT/bundles/"
@@ -41,7 +45,7 @@ def generate_launch_description() -> LaunchDescription:
             DeclareLaunchArgument("display_max_width", default_value="2560"),
             DeclareLaunchArgument("default_mode", default_value="2"),
             DeclareLaunchArgument(
-                "gstreamer_mjpeg_decode", default_value="true"
+                "gstreamer_mjpeg_decode", default_value="false"
             ),
             DeclareLaunchArgument("opengl_view", default_value="false"),
             DeclareLaunchArgument("pipeline_overlap", default_value="false"),
@@ -136,6 +140,9 @@ def generate_launch_description() -> LaunchDescription:
                 output="screen",
                 parameters=[
                     {
+                        "adaptive_display_fps": ParameterValue(
+                            adaptive_display_fps, value_type=bool
+                        ),
                         "display_fps": ParameterValue(
                             display_fps, value_type=float
                         ),
