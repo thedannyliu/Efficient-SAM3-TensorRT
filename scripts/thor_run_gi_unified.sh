@@ -30,6 +30,9 @@ docker run -d --name "$NAME" \
 
 for _ in $(seq 1 150); do
   if curl -fsS --max-time 2 "http://127.0.0.1:$PORT/status.json" >/dev/null; then
+    PYTHONPATH="$REPO_ROOT/src" python3 "$REPO_ROOT/scripts/warm_gi.py" \
+      --base-url "http://127.0.0.1:$PORT" || \
+      echo "InstinctSAM warm-up failed; the first prompt will warm it"
     echo "InstinctSAM unified API ready on http://127.0.0.1:$PORT"
     exit 0
   fi

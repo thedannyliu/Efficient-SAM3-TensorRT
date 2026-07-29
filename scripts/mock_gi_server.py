@@ -71,7 +71,12 @@ class Handler(BaseHTTPRequestHandler):
                 }
             )
             return
-        if self.path in {"/raw.jpg", "/track.jpg"}:
+        if self.path in {
+            "/raw.jpg",
+            "/track.jpg",
+            "/snapshot_raw.jpg",
+            "/snapshot.jpg",
+        }:
             body = self.state.jpeg
             self.send_response(200)
             self.send_header("Content-Type", "image/jpeg")

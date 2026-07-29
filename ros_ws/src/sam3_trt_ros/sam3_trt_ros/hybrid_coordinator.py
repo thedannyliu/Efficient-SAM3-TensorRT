@@ -31,7 +31,7 @@ class HybridCoordinator(Node):
         super().__init__("sam3_sam2_hybrid_coordinator")
         self.declare_parameter("relay_topic", "/hybrid/camera/image_raw")
         self.declare_parameter("gi_base_url", "http://127.0.0.1:8767")
-        self.declare_parameter("gi_timeout", 60.0)
+        self.declare_parameter("gi_timeout", 15.0)
         self.declare_parameter("max_objects", 8)
         self.declare_parameter("min_mask_area", 25)
         self.declare_parameter("sam2_service_timeout", 10.0)
