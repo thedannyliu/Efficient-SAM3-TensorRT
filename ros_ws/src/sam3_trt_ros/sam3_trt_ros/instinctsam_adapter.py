@@ -58,7 +58,8 @@ class MjpegReader:
             if self.stop.is_set():
                 break
             capture = self.open_capture()
-            capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+            if self.backend == "opencv_ffmpeg":
+                capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
             self.capture = capture
             while not self.stop.is_set() and self.enabled.is_set():
                 ok, frame = capture.read()
