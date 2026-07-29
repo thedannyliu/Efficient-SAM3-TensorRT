@@ -44,6 +44,7 @@ class HybridCoordinator(Node):
         self.expected_stamp = 0
         self.expected_objects = 0
         self.initialized = Event()
+        self.sam2_ready = Event()
         self.relay = self.create_publisher(
             Image,
             str(self.get_parameter("relay_topic").value),
@@ -99,6 +100,8 @@ class HybridCoordinator(Node):
     def on_mode(self, message: UInt8) -> None:
         enabled = message.data == SetPipelineMode.Request.HYBRID
         self.enabled = enabled
+        if enabled:
+            self.sam2_ready.clear()
         if self.relay_client.service_is_ready():
             request = SetBool.Request()
             request.data = enabled
@@ -111,6 +114,7 @@ class HybridCoordinator(Node):
             value = json.loads(message.data)
         except json.JSONDecodeError:
             return
+        self.sam2_ready.set()
         if (
             int(value.get("stamp_ns", 0)) == self.expected_stamp
             and len(value.get("objects", [])) == self.expected_objects
@@ -163,6 +167,9 @@ class HybridCoordinator(Node):
         try:
             if not self.enabled:
                 raise RuntimeError("hybrid pipeline is inactive; press 2 first")
+            timeout = float(self.get_parameter("initialization_timeout").value)
+            if not self.sam2_ready.wait(timeout):
+                raise TimeoutError("SAM2 did not become ready after mode switch")
             text = request.text.strip()
             if not text:
                 raise ValueError("text prompt must not be empty")
@@ -222,7 +229,6 @@ class HybridCoordinator(Node):
             self.initialized.clear()
             init_start = perf_counter()
             self.relay.publish(frozen)
-            timeout = float(self.get_parameter("initialization_timeout").value)
             if not self.initialized.wait(timeout):
                 raise TimeoutError("SAM2 did not initialize on the frozen frame")
             init_ms = (perf_counter() - init_start) * 1000.0
