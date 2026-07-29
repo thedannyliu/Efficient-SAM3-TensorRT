@@ -13,6 +13,7 @@ def generate_launch_description() -> LaunchDescription:
     default_mode = LaunchConfiguration("default_mode")
     pipeline_overlap = LaunchConfiguration("pipeline_overlap")
     shared_memory_poll_hz = LaunchConfiguration("shared_memory_poll_hz")
+    track_concurrency = LaunchConfiguration("track_concurrency")
     viewer = LaunchConfiguration("viewer")
     return LaunchDescription(
         [
@@ -30,6 +31,7 @@ def generate_launch_description() -> LaunchDescription:
             DeclareLaunchArgument("default_mode", default_value="2"),
             DeclareLaunchArgument("pipeline_overlap", default_value="false"),
             DeclareLaunchArgument("shared_memory_poll_hz", default_value="240.0"),
+            DeclareLaunchArgument("track_concurrency", default_value="8"),
             DeclareLaunchArgument("viewer", default_value="true"),
             Node(
                 package="sam3_trt_ros",
@@ -87,7 +89,9 @@ def generate_launch_description() -> LaunchDescription:
                             shared_memory_poll_hz, value_type=float
                         ),
                         "max_objects": 8,
-                        "track_concurrency": 8,
+                        "track_concurrency": ParameterValue(
+                            track_concurrency, value_type=int
+                        ),
                         "pipeline_overlap": ParameterValue(
                             pipeline_overlap, value_type=bool
                         ),
