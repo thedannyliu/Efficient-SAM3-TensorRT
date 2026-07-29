@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import json
 from collections import deque
-from time import perf_counter
+from threading import Thread
+from time import perf_counter, sleep
 
 import cv2
 import numpy as np
@@ -628,6 +629,7 @@ class InteractiveViewer(Node):
         now = perf_counter()
         if smooth_mode:
             if now < self.next_display_time:
+                sleep(min(self.next_display_time - now, 0.001))
                 return
             missed_periods = max(
                 0, int((now - self.next_display_time) / self.display_period)
@@ -830,13 +832,15 @@ def main() -> None:
     node = InteractiveViewer()
     executor = MultiThreadedExecutor(num_threads=2)
     executor.add_node(node)
+    spin_thread = Thread(target=executor.spin, daemon=True)
+    spin_thread.start()
     try:
         while rclpy.ok():
-            executor.spin_once(timeout_sec=0.001)
             node.display()
     finally:
         cv2.destroyAllWindows()
         executor.shutdown()
+        spin_thread.join(timeout=2.0)
         node.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()
