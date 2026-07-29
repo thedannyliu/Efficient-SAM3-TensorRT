@@ -162,6 +162,10 @@ The launcher reads `DISPLAY`, `XAUTHORITY`, and `XDG_RUNTIME_DIR` from the
 logged-in GNOME session. Do not assume `DISPLAY=:0`; it was `:1` during the
 2026-07-28 Thor validation.
 
+The unified launch defaults to mode 2 so an idle UI does not continuously run
+the full InstinctSAM backbone. Press `1` when native SAM3 tracking is needed;
+press `2` to return to the lower-power capture/hybrid path.
+
 Controls:
 
 - `1`: native General Instinct SAM3/SAM3.1 tracking.

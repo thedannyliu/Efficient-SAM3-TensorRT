@@ -3,12 +3,14 @@ from launch.actions import DeclareLaunchArgument
 from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 
 
 def generate_launch_description() -> LaunchDescription:
     bundle_dir = LaunchConfiguration("bundle_dir")
     base_url = LaunchConfiguration("base_url")
     display_max_width = LaunchConfiguration("display_max_width")
+    default_mode = LaunchConfiguration("default_mode")
     viewer = LaunchConfiguration("viewer")
     return LaunchDescription(
         [
@@ -23,6 +25,7 @@ def generate_launch_description() -> LaunchDescription:
                 "base_url", default_value="http://127.0.0.1:8767"
             ),
             DeclareLaunchArgument("display_max_width", default_value="1600"),
+            DeclareLaunchArgument("default_mode", default_value="2"),
             DeclareLaunchArgument("viewer", default_value="true"),
             Node(
                 package="sam3_trt_ros",
@@ -34,7 +37,14 @@ def generate_launch_description() -> LaunchDescription:
                 package="sam3_trt_ros",
                 executable="mode_manager",
                 output="screen",
-                parameters=[{"gi_base_url": base_url}],
+                parameters=[
+                    {
+                        "gi_base_url": base_url,
+                        "default_mode": ParameterValue(
+                            default_mode, value_type=int
+                        ),
+                    }
+                ],
             ),
             Node(
                 package="sam3_trt_ros",
