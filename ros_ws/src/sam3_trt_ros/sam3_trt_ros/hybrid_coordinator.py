@@ -221,8 +221,11 @@ class HybridCoordinator(Node):
         add_response = self.call(self.add_client, request, "/sam/add_object")
         if not add_response.success:
             raise RuntimeError(f"/sam/add_object failed: {add_response.message}")
-        self.relay.publish(frozen)
-        if not self.initialized.wait(timeout):
+        for _ in range(10):
+            self.relay.publish(frozen)
+            if self.initialized.wait(min(0.1, timeout)):
+                break
+        if not self.initialized.is_set():
             raise TimeoutError("SAM2 did not initialize geometry on the frozen frame")
         self.resume()
 
