@@ -154,10 +154,13 @@ publishes the same source frames to both routes, so switching does not reopen
 the camera.
 
 ```bash
-source ~/Efficient-SAM3-TensorRT/scripts/source_thor_ros_env.sh
-export DISPLAY=:0
-ros2 launch sam3_trt_ros unified.launch.py
+cd ~/Efficient-SAM3-TensorRT
+bash scripts/thor_launch_unified_ui.sh
 ```
+
+The launcher reads `DISPLAY`, `XAUTHORITY`, and `XDG_RUNTIME_DIR` from the
+logged-in GNOME session. Do not assume `DISPLAY=:0`; it was `:1` during the
+2026-07-28 Thor validation.
 
 Controls:
 
@@ -167,6 +170,19 @@ Controls:
 - mouse drag: geometry prompt in mode 1.
 - `r`: reset the active mode.
 - `q`: exit.
+
+Validated on the D455 and the real TV5M FP16 bundle on 2026-07-28:
+
+- mode 1 text prompt created three `monitor` tracks and selected multiplex;
+- mode 2 created two `monitor` masks, converted them to boxes, and initialized
+  two TV5M tracks;
+- mode 2 handoff took 337.4 ms in that smoke run: 212.5 ms GI detection,
+  22.9 ms mask-to-box, and 23.7 ms SAM2 initialization;
+- subsequent SAM2 model inference was 48.4 ms for two objects.
+
+These are smoke values. The TV5M bundle printed TensorRT's cross-device engine
+warning, so rebuild its engines on Thor before treating the speed as a final
+Thor benchmark.
 
 In mode 2, the coordinator converts masks to at most eight boxes and initializes
 SAM2 using the exact source timestamp. SAM2 stays loaded but receives no frames
