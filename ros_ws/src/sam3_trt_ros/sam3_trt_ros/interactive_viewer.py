@@ -33,7 +33,7 @@ class InteractiveViewer(Node):
         self.declare_parameter("display_max_width", 2560)
         self.declare_parameter("display_fps", 60.0)
         self.declare_parameter("opengl_view", False)
-        self.declare_parameter("shared_view_poll_hz", 240.0)
+        self.declare_parameter("shared_view_poll_hz", 120.0)
         self.declare_parameter("smooth_camera_view", True)
         self.declare_parameter(
             "shared_memory_path", "/dev/shm/sam3_sam2_frame.bin"

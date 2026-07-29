@@ -22,8 +22,10 @@ from sam3_trt_msgs.srv import AddBox, AddPoint, SetTextPrompt
 
 
 class MjpegReader:
-    def __init__(self, url: str) -> None:
+    def __init__(self, url: str, gstreamer_decode: bool = False) -> None:
         self.url = url
+        self.gstreamer_decode = gstreamer_decode
+        self.backend = "opencv_ffmpeg"
         self.lock = Lock()
         self.stop = Event()
         self.enabled = Event()
@@ -33,13 +35,29 @@ class MjpegReader:
         self.thread = Thread(target=self.run, daemon=True)
         self.thread.start()
 
+    def open_capture(self) -> cv2.VideoCapture:
+        if self.gstreamer_decode:
+            pipeline = (
+                f"souphttpsrc location={self.url} is-live=true "
+                "! multipartdemux ! nvjpegdec ! videoconvert "
+                "! video/x-raw,format=BGR "
+                "! appsink drop=true max-buffers=1 sync=false"
+            )
+            capture = cv2.VideoCapture(pipeline, cv2.CAP_GSTREAMER)
+            if capture.isOpened():
+                self.backend = "gstreamer_nvjpeg"
+                return capture
+            capture.release()
+        self.backend = "opencv_ffmpeg"
+        return cv2.VideoCapture(self.url)
+
     def run(self) -> None:
         while not self.stop.is_set():
             if not self.enabled.wait(0.2):
                 continue
             if self.stop.is_set():
                 break
-            capture = cv2.VideoCapture(self.url)
+            capture = self.open_capture()
             capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
             self.capture = capture
             while not self.stop.is_set() and self.enabled.is_set():
@@ -78,6 +96,7 @@ class InstinctSAMAdapter(Node):
         self.declare_parameter("poll_fps", 60.0)
         self.declare_parameter("status_fps", 5.0)
         self.declare_parameter("http_timeout", 1.0)
+        self.declare_parameter("gstreamer_mjpeg_decode", True)
         self.declare_parameter("relay_topic", "/hybrid/camera/image_raw")
         self.declare_parameter("shared_memory_path", "")
         self.declare_parameter("shared_memory_max_bytes", 8 * 1024 * 1024)
@@ -86,8 +105,15 @@ class InstinctSAMAdapter(Node):
         self.client = InstinctSAMClient(base_url, timeout=timeout)
         self.base_url = base_url
         self.bridge = CvBridge()
-        self.raw_reader = MjpegReader(f"{base_url}/raw.mjpg")
-        self.overlay_reader = MjpegReader(f"{base_url}/track.mjpg")
+        gstreamer_decode = bool(
+            self.get_parameter("gstreamer_mjpeg_decode").value
+        )
+        self.raw_reader = MjpegReader(
+            f"{base_url}/raw.mjpg", gstreamer_decode
+        )
+        self.overlay_reader = MjpegReader(
+            f"{base_url}/track.mjpg", gstreamer_decode
+        )
         shared_memory_path = str(
             self.get_parameter("shared_memory_path").value
         )
@@ -246,6 +272,7 @@ class InstinctSAMAdapter(Node):
                     "source_height": self.height,
                     "adapter_poll_ms": (perf_counter() - start) * 1000.0,
                     "raw_reader_fps": self.raw_reader_fps,
+                    "raw_decode_backend": self.raw_reader.backend,
                     "image_publish_fps": self.image_publish_fps,
                     "image_copy_ms": self.image_copy_ms,
                     "image_publish_ms": self.image_publish_ms,

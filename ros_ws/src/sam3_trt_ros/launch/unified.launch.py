@@ -12,6 +12,7 @@ def generate_launch_description() -> LaunchDescription:
     display_fps = LaunchConfiguration("display_fps")
     display_max_width = LaunchConfiguration("display_max_width")
     default_mode = LaunchConfiguration("default_mode")
+    gstreamer_mjpeg_decode = LaunchConfiguration("gstreamer_mjpeg_decode")
     opengl_view = LaunchConfiguration("opengl_view")
     pipeline_overlap = LaunchConfiguration("pipeline_overlap")
     pipeline_overlap_max_objects = LaunchConfiguration(
@@ -37,13 +38,16 @@ def generate_launch_description() -> LaunchDescription:
             DeclareLaunchArgument("display_fps", default_value="60.0"),
             DeclareLaunchArgument("display_max_width", default_value="2560"),
             DeclareLaunchArgument("default_mode", default_value="2"),
+            DeclareLaunchArgument(
+                "gstreamer_mjpeg_decode", default_value="true"
+            ),
             DeclareLaunchArgument("opengl_view", default_value="false"),
             DeclareLaunchArgument("pipeline_overlap", default_value="false"),
             DeclareLaunchArgument(
                 "pipeline_overlap_max_objects", default_value="1"
             ),
             DeclareLaunchArgument("shared_memory_poll_hz", default_value="240.0"),
-            DeclareLaunchArgument("shared_view_poll_hz", default_value="240.0"),
+            DeclareLaunchArgument("shared_view_poll_hz", default_value="120.0"),
             DeclareLaunchArgument("smooth_camera_view", default_value="true"),
             DeclareLaunchArgument("track_concurrency", default_value="4"),
             DeclareLaunchArgument("viewer", default_value="true"),
@@ -56,6 +60,9 @@ def generate_launch_description() -> LaunchDescription:
                 parameters=[
                     {
                         "base_url": base_url,
+                        "gstreamer_mjpeg_decode": ParameterValue(
+                            gstreamer_mjpeg_decode, value_type=bool
+                        ),
                         "shared_memory_path": (
                             "/dev/shm/sam3_sam2_frame.bin"
                         ),
