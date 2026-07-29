@@ -15,6 +15,7 @@ recall on the fixed workload is unchanged.
 | `shared-rgb-input` | `8d85337` / SAM2 `87a4350` | GI → TV5M SAM2, 1 object, displayed | Use OpenCV's SIMD BGR-to-RGB conversion before the shared write and remove the C++ per-pixel channel loop | 23.991 FPS; source age 59.53 ms | 27.218 FPS; source age 48.30 ms | callback 57.22 → 45.36 ms (-20.7%) | 13.5% | -18.9% mean | exact channel permutation | accept |
 | `opengl-scaled-viewer` | `1cc8594` | GI → TV5M SAM2, 1 object, displayed | Use the available Qt5 OpenGL HighGUI path to scale the 640x360 preview into the 2560x1440 interactive window | 27.218 FPS; inference 34.11 ms | 29.296 FPS; inference 29.46 ms | 13.6% inference | 7.6% | 48.30 → 39.18 ms (-18.9%) | rendering only | accept |
 | `shared-track-engine-contexts` | SAM2 `377dfb0` | GI → TV5M SAM2, 1 object, displayed | Deserialize one track engine and create eight independent execution contexts instead of eight engine copies | inference 29.462 ms; TV11 load 3523.9 ms | inference 29.443 ms; TV11 load 3246.9 ms | neutral inference; 7.9% load | not claimed | 39.18 → 37.11 ms; camera variance | same engine and per-object state | accept for initialization/resource use |
+| `shared-poll-1000hz` | `6a97a2c` / `a60e1cf` | GI → TV5M SAM2, 1 object, 848x480@60 displayed | Increase latest-frame header polling from 240 to 1000 Hz | source age 41.87 ms; inference 28.96 ms | source age 41.69 ms; inference 29.80 ms | not repeatable | not claimed | -0.19 ms (-0.4%) | same shared pixels | reject; retain configurable 240 Hz default |
 
 The final two-object candidate is 2.413x the original ROS relay throughput
 (+141.3%), reduces source-age p95 by 71.9%, and reduces latest-slot overwrites
@@ -82,6 +83,29 @@ Traces remain ignored on Thor under
 The comparison baseline is the preceding shared-memory/RGB matrix. The
 TV11M completed rate being slightly higher than TV5M is within camera timing
 variance; the model-path ordering remains TV5M, TV11M, then TV21M.
+
+## 60 FPS camera capacity
+
+The RealSense does not expose 1280x720@60, so the capacity run used its
+supported 848x480@60 color profile. The licensed vendor runtime reported a
+stable 59.74 FPS capture after its 93.7 s full restart. This profile measures
+processing capacity; it is not an image-quality comparison with the
+1280x720@30 deployment default.
+
+| Model | Objects | Completed FPS | Mean inference | Mean source age | Latest-slot drops |
+|---|---:|---:|---:|---:|---:|
+| TV5M | 1 | 33.267 | 29.797 ms | 41.686 ms | 244 |
+| TV11M | 1 | 32.650 | 30.427 ms | 42.387 ms | 259 |
+| TV21M | 1 | 28.872 | 34.445 ms | 46.501 ms | 356 |
+| TV5M | 2 | 22.397 | 44.541 ms | 57.422 ms | 356 |
+| TV5M | 4 | 11.949 | 83.565 ms | 96.054 ms | 871 |
+
+The single-object rows use 100 warm-up and 500 measured outputs. The two- and
+four-object rows use 50 warm-up and 300 requested outputs; the four-object
+SSH collector retained 280 rows, which is sufficient for the capacity smoke
+but should be repeated for a formal three-run median. The model continues to
+process latest-only input, so drops are expected whenever capacity is below
+59.74 FPS and do not indicate an accumulating queue.
 
 ## Runtime selector smoke
 
