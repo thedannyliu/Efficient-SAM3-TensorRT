@@ -176,11 +176,12 @@ class InstinctSAMAdapter(Node):
         if raw is not None and raw_sequence != self.last_raw_sequence:
             self.height, self.width = raw.shape[:2]
             start = perf_counter()
-            message = (
-                None
-                if self.hybrid_enabled and self.shared_writer is not None
-                else self.image_message(raw, stamp)
-            )
+            shared_frame = None
+            if self.hybrid_enabled and self.shared_writer is not None:
+                shared_frame = cv2.cvtColor(raw, cv2.COLOR_BGR2RGB)
+                message = None
+            else:
+                message = self.image_message(raw, stamp)
             self.image_copy_ms = (perf_counter() - start) * 1000.0
             start = perf_counter()
             published = False
@@ -191,7 +192,8 @@ class InstinctSAMAdapter(Node):
                             int(stamp.sec) * 1_000_000_000
                             + int(stamp.nanosec)
                         )
-                        self.shared_writer.write(raw, stamp_ns)
+                        assert shared_frame is not None
+                        self.shared_writer.write(shared_frame, stamp_ns)
                     else:
                         assert message is not None
                         self.relay_publisher.publish(message)
