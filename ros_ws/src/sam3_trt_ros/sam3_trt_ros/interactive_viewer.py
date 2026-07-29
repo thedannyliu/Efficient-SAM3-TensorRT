@@ -267,16 +267,16 @@ class InteractiveViewer(Node):
             if object_id == 0:
                 continue
             colors[labels == object_id] = palette[(int(object_id) - 1) % 4]
-        mask = labels != 0
+        mask = (labels != 0).astype(np.uint8) * 255
         if (labels.shape[1], labels.shape[0]) != self.canvas_size:
             colors = cv2.resize(
                 colors, self.canvas_size, interpolation=cv2.INTER_NEAREST
             )
             mask = cv2.resize(
-                mask.astype(np.uint8),
+                mask,
                 self.canvas_size,
                 interpolation=cv2.INTER_NEAREST,
-            ).astype(bool)
+            )
         self.label_overlay = (mask, colors)
         self.label_version += 1
 
@@ -682,10 +682,10 @@ class InteractiveViewer(Node):
         label_overlay = self.label_overlay
         if smooth_mode and label_overlay is not None:
             label_mask, label_colors = label_overlay
-            rendered[label_mask] = (
-                rendered[label_mask].astype(np.float32) * 0.55
-                + label_colors[label_mask].astype(np.float32) * 0.45
-            ).astype(np.uint8)
+            blended = cv2.addWeighted(
+                rendered, 0.55, label_colors, 0.45, 0.0
+            )
+            cv2.copyTo(blended, label_mask, rendered)
         if self.drag_start is not None and self.drag_current is not None:
             cv2.rectangle(
                 rendered,
