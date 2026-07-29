@@ -189,18 +189,22 @@ The unified launch defaults to mode 2 so an idle UI does not continuously run
 the full InstinctSAM backbone. Press `1` when native SAM3 tracking is needed;
 press `2` to return to the lower-power capture/hybrid path.
 
-The measured low-latency defaults are four concurrent object contexts and no
-cross-frame delay. They can be stated explicitly when reproducing a run:
+The measured defaults use four concurrent object contexts, the object-count
+TensorRT router, and the adaptive display router:
 
 ```bash
 bash scripts/thor_start_unified_desktop.sh \
-  track_concurrency:=4 pipeline_overlap:=false
+  track_concurrency:=4 pipeline_overlap:=true \
+  pipeline_overlap_max_objects:=1 adaptive_display_fps:=true
 ```
 
-For single-object throughput experiments only, `pipeline_overlap:=true`
-raised the 848x480@60 completed rate from 33.766 to 37.641 FPS but increased
-mean source age from 42.072 to 65.250 ms. It is therefore not the interactive
-default. See `docs/benchmarks/optimization_log.md` for the multi-object A/B.
+For one object, overlap raised the isolated 848x480@60 completed rate from
+33.766 to 37.641 FPS but increased mean source age from 42.072 to 65.250 ms.
+At two objects the gain was only 2.7% while source age increased by 44.4 ms,
+and at four objects overlap was slower. The router therefore uses overlap only
+for one object and changes to synchronous tracking at two or more without
+clearing object memories or IDs. Use `pipeline_overlap:=false` when the lowest
+single-object mask age matters more than throughput.
 
 Controls:
 
@@ -221,13 +225,13 @@ Controls:
 
 The viewer initially opens at 2560x1440. Use a preset or drag any window edge
 or corner to choose another size; image, status text, and prompt overlays scale
-together. Both modes are normalized to one 1280x720 interaction canvas before
-rendering (the native GI overlay is 1280x720 while the SAM2 preview is
-640x360), and the GUI performs only the final display scaling. This keeps text
-at the same visual size when switching modes. Mouse callbacks are returned in
-the shared canvas coordinates and converted once to the active camera
-coordinates, so point/box prompts remain aligned at every display size and
-camera profile.
+together. Mode 2 composites the current raw camera frame and newest SAM2 label
+image on an 848x480 interaction canvas, then the GUI performs the final display
+scaling. Mouse callbacks are returned in the shared canvas coordinates and
+converted once to the active camera coordinates, so point/box prompts remain
+aligned at every display size and camera profile. Override the internal canvas
+with `render_width:=WIDTH render_height:=HEIGHT` only when measuring that
+rendering tradeoff.
 Override the initial preset selection with `display_max_width:=WIDTH`.
 
 The model menu keeps only one SAM2 tracker resident. A switch constructs and
@@ -241,15 +245,41 @@ actual capture request, restarts the licensed GI container using its public
 entrypoint arguments, restores the active pipeline mode, verifies the returned
 JPEG dimensions, and resets tracking. The TensorRT cache volume is retained,
 but GI model loading makes a camera switch substantially slower than a window
-resize or SAM2 model switch. The UI maps its 1280x720 interaction canvas back
+resize or SAM2 model switch. The UI maps its interaction canvas back
 to the active camera pixels before sending point/box prompts.
 
 Thor validation on 2026-07-29 found that model changes take 2.2–2.7 s. Camera
 changes take 87.7–92.8 s because the complete licensed GI runtime reloads.
 The menu therefore reports requested and observed camera FPS separately.
-848x480@60 reached 60.3 capture FPS, but its short SAM2 preview diagnostic was
-only about 8.8 FPS; 1280x720@30 remains the recommended default. The D455 does
-not expose 60 FPS at 1280x720, so that unsupported combination is not offered.
+848x480@60 reached 60.3 capture FPS and is the recommended latency/capacity
+profile with the smooth shared-camera viewer. Use 1280x720@30 when spatial
+detail matters more than motion cadence. The D455 does not expose 60 FPS at
+1280x720, so that unsupported combination is not offered.
+
+Mode 2's displayed camera is intentionally decoupled from model results. The
+adapter writes the latest raw RGB frame to shared memory, SAM2 publishes a
+small label image, and the viewer composites the newest available pair. With
+848x480@60 capture, the measured idle render was 59.23 FPS with 0.78 ms
+interval standard deviation.
+
+When masks are active, desktop painting and TensorRT contend for the GPU.
+`adaptive_display_fps:=true` keeps the cadence sustainable: 28 FPS for one
+object, 18 FPS for two, 9 FPS for four, and a 5 FPS floor. This made the
+two-object stream exactly 18.00 FPS with 1.60 ms interval standard deviation
+and improved model throughput by 7.0% relative to attempting a 30 FPS display.
+Disable it with `adaptive_display_fps:=false` only for display-capacity
+experiments.
+
+Inspect the actual GUI cadence and model path separately:
+
+```bash
+ros2 topic echo /sam3_viewer/render_metrics --once --field data
+ros2 topic echo /sam/result_json --once --field data
+```
+
+The first reports configured/active display FPS, interval jitter, unique raw
+camera cadence, and compose/paint timing. The second reports model latency,
+tracking FPS, source age, object IDs, and whether overlap is currently active.
 
 Mode 1 keeps the vendor FPS watermark at the top-left and places only our mode
 and action status at the bottom. Mode 2 draws our model latency/FPS/backend

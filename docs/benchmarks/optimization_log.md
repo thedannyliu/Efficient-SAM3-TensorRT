@@ -139,8 +139,12 @@ Commit `65dc282` exposes the additional double-buffered cross-frame path as
 Overlap is therefore useful only when single-object completed throughput is
 more important than interactive latency. Its fixed one-processed-frame delay
 becomes increasingly expensive as object count grows, and concurrent encoder
-and tracking kernels contend for the same GPU. The unified launch keeps it
-off by default.
+and tracking kernels contend for the same GPU. Commit `f19ab9e` routes this
+automatically: overlap is active for one tracked object and the synchronous
+path is restored for two or more. A route transition discards only the pending
+encoded frame; object memories and IDs remain intact. The unified launch
+enables this router by default. Set `pipeline_overlap:=false` for a strictly
+latency-first single-object session.
 
 Commit `fab0c9e` also exposes `track_concurrency`. A four-object sweep used the
 synchronous path with otherwise identical settings:
@@ -159,6 +163,57 @@ concurrency 8. Processing two groups of four avoids enough GPU contention to
 improve both throughput and source age without changing masks. The unified
 launch therefore defaults to `track_concurrency:=4`; the standalone SAM2
 launches retain their separately documented defaults.
+
+## Smooth rendered-camera and object-count routing
+
+The original mode-2 window was paced by processed SAM2 previews. Camera motion
+therefore looked slower whenever the tracker was busy even though the vendor
+capture remained near 60 FPS. Commits `98fdc61` through `7be68ff` instead read
+the latest raw frame from shared memory, composite the newest low-resolution
+label image, and publish `/sam3_viewer/render_metrics`. The camera and mask now
+have independent cadences.
+
+Two correctness/performance bugs were found during the displayed test:
+
+- mask and color arrays were updated separately across the ROS and display
+  threads, which could produce a shape mismatch and terminate the viewer;
+  `be91a25` replaces the pair atomically;
+- NumPy per-pixel alpha blending cost about 9.1 ms per displayed frame;
+  OpenCV vectorized blending plus an 848x480 render canvas reduced the latest
+  one-object composite sample to 5.2 ms. The resizable window still opens at
+  2560x1440 and prompt coordinates are mapped from the render canvas to the
+  camera source.
+
+Thor's current desktop session throttled the OpenGL HighGUI path to about
+0.94 FPS, so these measurements use the software HighGUI path. NVIDIA
+`nvjpegdec` was also tested. It decoded an isolated MJPEG stream faster, but
+the integrated adapter remained at about 48 FPS and rendered at 57.91 FPS,
+versus about 50 FPS adapter input and 59.77 FPS render with OpenCV/FFmpeg.
+The launch therefore defaults to FFmpeg and retains GStreamer as an opt-in
+experiment.
+
+Rendering at a fixed 60 FPS while TensorRT saturated the GPU caused irregular
+paint waits and also reduced tracking throughput. The final display router
+keeps 60 FPS while idle and chooses
+`max(5, min(28, 36 / object_count))` FPS while tracking. The TensorRT router
+uses overlap for one object and synchronous tracking for two or more. The
+following live-camera results use TV5M FP16, 848x480@60, software display, and
+four tracking contexts:
+
+| Objects | TensorRT route | Model latency | Tracking FPS | Display target / measured | Display interval std | Source age |
+|---:|---|---:|---:|---:|---:|---:|
+| 0 | idle | -- | -- | 60 / 59.23 FPS | 0.78 ms | -- |
+| 1 | overlap | 30.57 ms | 32.43 | 28 / 28.00 FPS | 3.16 ms | 75.51 ms |
+| 2 | synchronous | 52.07 ms | 19.13 | 18 / 18.00 FPS | 1.60 ms | 67.10 ms |
+| 4 | synchronous | 87.96 ms | 11.26 | 9 / 9.00 FPS | 2.35 ms | 102.33 ms |
+
+The one-to-two-object transition preserved object `1` and produced IDs
+`[1, 2]` while `pipeline_overlap` changed from `true` to `false`. At two
+objects, routing the display to 18 FPS instead of attempting 30 FPS improved
+tracking from 17.87 to 19.13 FPS (+7.0%), reduced tracker latency from 55.73
+to 52.07 ms (-6.6%), and reduced display interval standard deviation from
+5.99 to 1.60 ms. This changes only presentation cadence and frame scheduling;
+model weights, FP16 precision, masks, and object state are unchanged.
 
 ## Runtime selector smoke
 
