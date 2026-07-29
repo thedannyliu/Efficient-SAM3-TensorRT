@@ -47,6 +47,7 @@ class HybridCoordinator(Node):
         self.handoff_lock = Lock()
         self.expected_stamp = 0
         self.expected_objects = 0
+        self.match_any_stamp = False
         self.current_objects = 0
         self.initialized = Event()
         self.sam2_ready = Event()
@@ -138,7 +139,10 @@ class HybridCoordinator(Node):
         self.current_objects = len(value.get("objects", []))
         self.sam2_ready.set()
         if (
-            int(value.get("stamp_ns", 0)) == self.expected_stamp
+            (
+                self.match_any_stamp
+                or int(value.get("stamp_ns", 0)) == self.expected_stamp
+            )
             and len(value.get("objects", [])) == self.expected_objects
         ):
             self.initialized.set()
@@ -201,6 +205,7 @@ class HybridCoordinator(Node):
         frozen = self.frozen_frame()
         self.expected_stamp = self.stamp_ns(frozen)
         self.expected_objects = self.current_objects + 1
+        self.match_any_stamp = True
         self.initialized.clear()
         request = AddObject.Request()
         request.kind = kind
@@ -236,6 +241,7 @@ class HybridCoordinator(Node):
         finally:
             self.expected_stamp = 0
             self.expected_objects = 0
+            self.match_any_stamp = False
             self.handoff_lock.release()
         return response
 
@@ -261,6 +267,7 @@ class HybridCoordinator(Node):
         finally:
             self.expected_stamp = 0
             self.expected_objects = 0
+            self.match_any_stamp = False
             self.handoff_lock.release()
         return response
 
@@ -380,6 +387,7 @@ class HybridCoordinator(Node):
         finally:
             self.expected_stamp = 0
             self.expected_objects = 0
+            self.match_any_stamp = False
             self.handoff_lock.release()
         return response
 
