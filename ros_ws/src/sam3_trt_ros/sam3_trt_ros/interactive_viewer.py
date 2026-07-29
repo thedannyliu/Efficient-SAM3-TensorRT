@@ -25,6 +25,8 @@ class InteractiveViewer(Node):
         self.mode = 1
         self.bridge = CvBridge()
         self.frames: dict[int, object] = {}
+        self.frame_versions = {0: 0, 1: 0, 2: 0}
+        self.last_render_state: object = None
         self.raw_frame = None
         self.source_width = 0
         self.source_height = 0
@@ -101,6 +103,7 @@ class InteractiveViewer(Node):
 
     def on_image(self, mode: int, message: Image) -> None:
         frame = self.bridge.imgmsg_to_cv2(message, desired_encoding="bgr8")
+        self.frame_versions[mode] += 1
         if mode == 0:
             self.raw_frame = frame
         else:
@@ -248,7 +251,24 @@ class InteractiveViewer(Node):
 
     def display(self) -> None:
         if self.frame is None:
+            self.handle_key(cv2.waitKeyEx(1))
             return
+        frame_mode = self.mode if self.mode in self.frames else 0
+        render_state = (
+            frame_mode,
+            self.frame_versions[frame_mode],
+            self.mode,
+            self.status,
+            self.entering_text,
+            self.text,
+            self.drag_start,
+            self.drag_current,
+            json.dumps(self.metrics, sort_keys=True, default=str),
+        )
+        if render_state == self.last_render_state:
+            self.handle_key(cv2.waitKeyEx(1))
+            return
+        self.last_render_state = render_state
         self.scale = min(
             self.display_scale,
             self.display_max_width / self.frame.shape[1],
