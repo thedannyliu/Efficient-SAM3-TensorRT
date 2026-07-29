@@ -13,6 +13,7 @@ recall on the fixed workload is unchanged.
 | `hybrid-shared-frame` | `12dc408` / SAM2 `6f1c15c` | GI → TV5M SAM2, no objects, headless | Replace the 2.76 MB cross-process ROS Image with a locked latest-frame file under `/dev/shm`; retain ROS for frozen prompt initialization | 15.506 FPS; source age 21.96 ms | 29.210 FPS; source age 19.44 ms | callback 19.50 → 17.14 ms (-12.1%) | 88.4% | -11.5% mean | exact same uint8 BGR pixels | accept |
 | `viewer-one-render-per-preview` | `fb19430` | GI → TV5M SAM2, 1 object, displayed | Do not call `imshow` for result JSON and again for the corresponding preview; draw newest metrics on the next preview | 23.031 FPS; inference 36.50 ms | 23.991 FPS; inference 33.12 ms | 9.3% inference | 4.2% | 62.59 → 59.53 ms (-4.9%) | rendering only | accept |
 | `shared-rgb-input` | `8d85337` / SAM2 `87a4350` | GI → TV5M SAM2, 1 object, displayed | Use OpenCV's SIMD BGR-to-RGB conversion before the shared write and remove the C++ per-pixel channel loop | 23.991 FPS; source age 59.53 ms | 27.218 FPS; source age 48.30 ms | callback 57.22 → 45.36 ms (-20.7%) | 13.5% | -18.9% mean | exact channel permutation | accept |
+| `opengl-scaled-viewer` | `1cc8594` | GI → TV5M SAM2, 1 object, displayed | Use the available Qt5 OpenGL HighGUI path to scale the 640x360 preview into the 2560x1440 interactive window | 27.218 FPS; inference 34.11 ms | 29.296 FPS; inference 29.46 ms | 13.6% inference | 7.6% | 48.30 → 39.18 ms (-18.9%) | rendering only | accept |
 
 The final two-object candidate is 2.413x the original ROS relay throughput
 (+141.3%), reduces source-age p95 by 71.9%, and reduces latest-slot overwrites
@@ -57,6 +58,29 @@ The adapter now records `raw_reader_fps`, `image_publish_fps`,
 `image_copy_ms`, `image_publish_ms`, and `image_transport`. A final steady
 sample reported 30.03 FPS vendor capture, 30.03 FPS MJPEG decode, 30.86 shared
 writes, 0.67 ms OpenCV BGR-to-RGB, and 2.80 ms locked shared-buffer write.
+
+## OpenGL viewer matrix
+
+The general HighGUI window used about 78% of one CPU core while scaling the
+640x360 SAM2 preview to the initial 2560x1440 window. Thor's OpenCV build
+reports Qt5 OpenGL support, so commit `1cc8594` adds `WINDOW_OPENGL` without
+changing the preview, model, mask, prompt, or window dimensions. Viewer CPU
+fell to 3--4%.
+
+The following 500-frame runs use the same 1280x720@30 camera profile, one
+center point, FP16 bundles, 100 warm-up outputs, and the displayed viewer.
+Traces remain ignored on Thor under
+`results/benchmarks/opengl_viewer_1cc8594/`.
+
+| Model | Completed FPS | Mean inference | Mean source age | Drops | Inference change | Source-age change |
+|---|---:|---:|---:|---:|---:|---:|
+| TV5M | 29.296 | 29.462 ms | 39.184 ms | 0 | -13.6% | -18.9% |
+| TV11M | 29.910 | 30.744 ms | 41.870 ms | 0 | -14.0% | -22.7% |
+| TV21M | 27.877 | 34.723 ms | 52.477 ms | 36 | -11.1% | -9.7% |
+
+The comparison baseline is the preceding shared-memory/RGB matrix. The
+TV11M completed rate being slightly higher than TV5M is within camera timing
+variance; the model-path ordering remains TV5M, TV11M, then TV21M.
 
 ## Runtime selector smoke
 
