@@ -186,7 +186,8 @@ Controls:
 - `t`: enter a text prompt for the active mode.
 - `m`: open the SAM2 model menu; choose `1`=TV5M, `2`=TV11M, or `3`=TV21M.
 - `c`: open the camera profile menu; choose `1`=640x360@30,
-  `2`=848x480@30, `3`=1280x720@30, or `4`=1280x720@60.
+  `2`=640x360@60, `3`=848x480@30, `4`=848x480@60, or
+  `5`=1280x720@30.
 - mouse single-click: positive point prompt in either mode.
 - mouse drag: box prompt in either mode.
 - `[` / `]`: select the previous/next display preset: 1280x720,

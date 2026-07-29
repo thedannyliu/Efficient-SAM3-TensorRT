@@ -4,7 +4,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
-from time import perf_counter
+from time import perf_counter, sleep
 
 import cv2
 import numpy as np
@@ -40,6 +40,7 @@ class ModeManager(Node):
         )
         self.active_mode = int(self.get_parameter("default_mode").value)
         self.camera_profile = (1280, 720, 30.0)
+        self.camera_observed_fps = 0.0
         self.create_service(
             SetPipelineMode, "/sam3_pipeline/set_mode", self.on_set_mode
         )
@@ -73,6 +74,7 @@ class ModeManager(Node):
                 "actual_width": width,
                 "actual_height": height,
                 "requested_fps": fps,
+                "observed_fps": self.camera_observed_fps,
                 "switch_ms": switch_ms,
             },
             separators=(",", ":"),
@@ -121,6 +123,12 @@ class ModeManager(Node):
             self.camera_profile = self.read_container_camera_profile()
         except Exception as error:
             self.get_logger().warning(f"cannot read camera profile: {error}")
+        try:
+            status = self.client.status()
+            if status.get("backend") == "capture_only":
+                self.camera_observed_fps = float(status.get("fps", 0.0))
+        except Exception:
+            pass
         self.publish_camera_profile()
         self.publish_mode()
         self.get_logger().info(f"active pipeline mode is {self.active_mode}")
@@ -167,9 +175,10 @@ class ModeManager(Node):
         requested = (int(request.width), int(request.height), float(request.fps))
         allowed = {
             (640, 360, 30.0),
+            (640, 360, 60.0),
             (848, 480, 30.0),
+            (848, 480, 60.0),
             (1280, 720, 30.0),
-            (1280, 720, 60.0),
         }
         response.requested_fps = requested[2]
         if requested not in allowed:
@@ -179,6 +188,7 @@ class ModeManager(Node):
             response.success = True
             response.actual_width = requested[0]
             response.actual_height = requested[1]
+            response.observed_fps = self.camera_observed_fps
             response.message = "camera profile is already active"
             return response
 
@@ -211,8 +221,15 @@ class ModeManager(Node):
                 detail = (completed.stderr or completed.stdout).strip()
                 raise RuntimeError(detail[-1000:] or "camera restart failed")
 
-            self.client.set_mode(self.mode_name(self.active_mode))
+            self.client.set_mode("hybrid")
             self.client.reset()
+            sleep(1.0)
+            self.camera_observed_fps = float(
+                self.client.status().get("fps", 0.0)
+            )
+            if self.active_mode != SetPipelineMode.Request.HYBRID:
+                self.client.set_mode(self.mode_name(self.active_mode))
+                self.client.reset()
             frame = cv2.imdecode(
                 np.frombuffer(self.client.raw_jpeg(), dtype=np.uint8),
                 cv2.IMREAD_COLOR,
@@ -226,6 +243,7 @@ class ModeManager(Node):
             response.success = True
             response.actual_width = actual_width
             response.actual_height = actual_height
+            response.observed_fps = self.camera_observed_fps
             response.switch_ms = switch_ms
             response.message = (
                 f"camera {actual_width}x{actual_height} ready in "

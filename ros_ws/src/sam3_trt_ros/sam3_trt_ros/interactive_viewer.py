@@ -83,11 +83,13 @@ class InteractiveViewer(Node):
         self.active_model = "TV5M"
         self.camera_profiles = [
             (640, 360, 30),
+            (640, 360, 60),
             (848, 480, 30),
+            (848, 480, 60),
             (1280, 720, 30),
-            (1280, 720, 60),
         ]
         self.active_camera_profile = (1280, 720, 30)
+        self.camera_observed_fps = 0.0
         self.display_max_width = int(self.get_parameter("display_max_width").value)
         self.preset_index = min(
             range(len(self.window_presets)),
@@ -216,6 +218,7 @@ class InteractiveViewer(Node):
             )
             self.source_sizes[0] = self.active_camera_profile[:2]
             self.source_sizes[1] = self.active_camera_profile[:2]
+            self.camera_observed_fps = float(value.get("observed_fps", 0.0))
         except (json.JSONDecodeError, KeyError, TypeError, ValueError):
             return
 
@@ -435,12 +438,14 @@ class InteractiveViewer(Node):
             )
             self.source_sizes[0] = self.active_camera_profile[:2]
             self.source_sizes[1] = self.active_camera_profile[:2]
+            self.camera_observed_fps = float(response.observed_fps)
             if self.reset_clients[2].service_is_ready():
                 self.reset_clients[2].call_async(Trigger.Request())
             self.metrics = {}
             self.status = (
                 f"camera {response.actual_width}x{response.actual_height}"
-                f"@{response.requested_fps:g} ready in "
+                f" requested {response.requested_fps:g}, observed "
+                f"{response.observed_fps:.1f} FPS; ready in "
                 f"{response.switch_ms:.1f} ms"
             )
         except Exception as error:
@@ -528,6 +533,7 @@ class InteractiveViewer(Node):
             self.camera_switching,
             self.active_model,
             self.active_camera_profile,
+            self.camera_observed_fps,
             self.text,
             self.drag_start,
             self.drag_current,
@@ -548,8 +554,10 @@ class InteractiveViewer(Node):
             )
         camera = (
             f"{self.active_camera_profile[0]}x{self.active_camera_profile[1]}"
-            f"@{self.active_camera_profile[2]}"
+            f" req{self.active_camera_profile[2]}"
         )
+        if self.camera_observed_fps > 0.0:
+            camera += f" obs{self.camera_observed_fps:.0f}"
         model = f" | {self.active_model}" if self.mode == 2 else ""
         lines = [
             f"Mode {self.mode}{model} | Cam {camera} | 1=GI  2=GI->SAM2",
