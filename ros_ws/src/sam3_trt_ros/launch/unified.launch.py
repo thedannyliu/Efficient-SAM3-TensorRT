@@ -24,7 +24,7 @@ def generate_launch_description() -> LaunchDescription:
             DeclareLaunchArgument(
                 "base_url", default_value="http://127.0.0.1:8767"
             ),
-            DeclareLaunchArgument("display_max_width", default_value="3840"),
+            DeclareLaunchArgument("display_max_width", default_value="2560"),
             DeclareLaunchArgument("default_mode", default_value="2"),
             DeclareLaunchArgument("viewer", default_value="true"),
             Node(

@@ -19,14 +19,14 @@ from sam3_trt_msgs.srv import AddBox, AddPoint, SetPipelineMode, SetTextPrompt
 class InteractiveViewer(Node):
     def __init__(self) -> None:
         super().__init__("sam3_trt_interactive_viewer")
-        self.declare_parameter("display_scale", 3.0)
-        self.declare_parameter("display_max_width", 3840)
+        self.declare_parameter("display_max_width", 2560)
         self.declare_parameter("confidence", 0.5)
         self.mode = 1
         self.bridge = CvBridge()
         self.frames: dict[int, object] = {}
         self.frame_versions = {0: 0, 1: 0, 2: 0}
         self.last_render_state: object = None
+        self.window_initialized = False
         self.raw_frame = None
         self.source_width = 0
         self.source_height = 0
@@ -38,7 +38,6 @@ class InteractiveViewer(Node):
         self.status = "t=text, click=point, drag=box, r=reset, q=quit"
         self.metrics: dict[str, object] = {}
         self.display_max_width = int(self.get_parameter("display_max_width").value)
-        self.display_scale = float(self.get_parameter("display_scale").value)
         self.confidence = float(self.get_parameter("confidence").value)
         self.create_subscription(
             Image,
@@ -94,7 +93,10 @@ class InteractiveViewer(Node):
             SetPipelineMode, "/sam3_pipeline/set_mode"
         )
         self.window_name = "SAM3 / SAM2 TensorRT tracking"
-        cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
+        cv2.namedWindow(
+            self.window_name,
+            cv2.WINDOW_NORMAL | cv2.WINDOW_KEEPRATIO,
+        )
         cv2.setMouseCallback(self.window_name, self.on_mouse)
 
     @property
@@ -131,6 +133,14 @@ class InteractiveViewer(Node):
 
     def to_source(self, x: int, y: int) -> tuple[float, float]:
         return x / self.scale, y / self.scale
+
+    def update_window_scale(self) -> None:
+        try:
+            _, _, width, _ = cv2.getWindowImageRect(self.window_name)
+        except cv2.error:
+            return
+        if self.source_width > 0 and width > 0:
+            self.scale = width / self.source_width
 
     def on_mouse(self, event: int, x: int, y: int, flags: int, _: object) -> None:
         if self.entering_text or self.frame is None:
@@ -266,25 +276,19 @@ class InteractiveViewer(Node):
             json.dumps(self.metrics, sort_keys=True, default=str),
         )
         if render_state == self.last_render_state:
+            self.update_window_scale()
             self.handle_key(cv2.waitKeyEx(1))
             return
         self.last_render_state = render_state
-        self.scale = min(
-            self.display_scale,
-            self.display_max_width / self.frame.shape[1],
-        )
-        rendered = cv2.resize(
-            self.frame,
-            (
-                int(self.frame.shape[1] * self.scale),
-                int(self.frame.shape[0] * self.scale),
-            ),
-            interpolation=cv2.INTER_LINEAR,
-        )
+        rendered = self.frame.copy()
         if self.drag_start is not None and self.drag_current is not None:
-            start = tuple(int(value * self.scale) for value in self.drag_start)
-            current = tuple(int(value * self.scale) for value in self.drag_current)
-            cv2.rectangle(rendered, start, current, (0, 255, 255), 2)
+            cv2.rectangle(
+                rendered,
+                self.drag_start,
+                self.drag_current,
+                (0, 255, 255),
+                2,
+            )
         lines = [f"Mode {self.mode} | 1=GI SAM3  2=GI->SAM2", self.status]
         if self.entering_text:
             lines.append(f"> {self.text}_")
@@ -317,6 +321,12 @@ class InteractiveViewer(Node):
                 cv2.LINE_AA,
             )
         cv2.imshow(self.window_name, rendered)
+        if not self.window_initialized:
+            initial_width = max(self.source_width, self.display_max_width)
+            initial_height = int(initial_width * self.source_height / self.source_width)
+            cv2.resizeWindow(self.window_name, initial_width, initial_height)
+            self.window_initialized = True
+        self.update_window_scale()
         self.handle_key(cv2.waitKeyEx(1))
 
 
