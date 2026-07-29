@@ -2,9 +2,9 @@
 
 This runbook deploys two selectable ROS 2 pipelines in one viewer:
 
-1. InstinctSAM native text/box tracking.
+1. InstinctSAM native text/point/box tracking.
 2. InstinctSAM first-frame text detection followed by TV5M FP16 SAM2 TensorRT
-   tracking.
+   tracking, with additional point/box prompts handled directly by SAM2.
 
 General Instinct artifacts stay under `~/vendor` and never enter Git.
 
@@ -149,14 +149,26 @@ export GI_RESEARCH_USE_ACK=research-evaluation-only
 bash scripts/thor_run_gi_unified.sh
 ```
 
-The GI container remains the sole owner of `/dev/video4`. Its ROS adapter
-publishes the same source frames to both routes, so switching does not reopen
-the camera.
+The GI container remains the sole owner of `/dev/video4`. Switching routes does
+not reopen the camera.
 
 ```bash
 cd ~/Efficient-SAM3-TensorRT
 bash scripts/thor_launch_unified_ui.sh
 ```
+
+For a cold start, launch both model loaders concurrently:
+
+```bash
+cd ~/Efficient-SAM3-TensorRT
+export GI_RESEARCH_USE_ACK=research-evaluation-only
+bash scripts/thor_start_unified_desktop.sh
+```
+
+This starts the GI container in the background while ROS loads the TV5M SAM2
+engine. If the GI service is already healthy, it is reused instead of being
+restarted. Both models remain resident, so mode 2 only performs first-frame
+detection and state transfer rather than loading either model on demand.
 
 The launcher reads `DISPLAY`, `XAUTHORITY`, and `XDG_RUNTIME_DIR` from the
 logged-in GNOME session. Do not assume `DISPLAY=:0`; it was `:1` during the
@@ -171,9 +183,14 @@ Controls:
 - `1`: native General Instinct SAM3/SAM3.1 tracking.
 - `2`: GI first-frame text detection followed by TV5M SAM2 TensorRT.
 - `t`: enter a text prompt for the active mode.
-- mouse drag: geometry prompt in mode 1.
+- mouse single-click: positive point prompt in either mode.
+- mouse drag: box prompt in either mode.
 - `r`: reset the active mode.
 - `q`: exit.
+
+The viewer displays the source image at 3x scale by default while keeping the
+status text at its original font size. Pass `display_max_width:=WIDTH` to the
+launch command when the desktop resolution is narrower than 3840 pixels.
 
 Validated on the D455 and the real TV5M FP16 bundle on 2026-07-28:
 
@@ -196,6 +213,10 @@ engines on Thor before treating this as the final achievable Thor speed.
 In mode 2, the coordinator converts masks to at most eight boxes and initializes
 SAM2 using the exact source timestamp. SAM2 stays loaded but receives no frames
 in mode 1.
+
+Mode 2 publishes only the SAM2 relay image, not a duplicate raw ROS image. The
+GI overlay MJPEG reader is also paused. These two omissions reduce image
+decode/copy/DDS work without changing model precision or masks.
 
 ## 8. Baseline
 
