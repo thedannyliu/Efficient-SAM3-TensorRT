@@ -25,6 +25,10 @@ def generate_launch_description() -> LaunchDescription:
     shared_view_poll_hz = LaunchConfiguration("shared_view_poll_hz")
     smooth_camera_view = LaunchConfiguration("smooth_camera_view")
     track_concurrency = LaunchConfiguration("track_concurrency")
+    track_bucket_min_objects = LaunchConfiguration(
+        "track_bucket_min_objects"
+    )
+    track_bucket_size = LaunchConfiguration("track_bucket_size")
     viewer = LaunchConfiguration("viewer")
     return LaunchDescription(
         [
@@ -58,6 +62,10 @@ def generate_launch_description() -> LaunchDescription:
             DeclareLaunchArgument("shared_view_poll_hz", default_value="120.0"),
             DeclareLaunchArgument("smooth_camera_view", default_value="true"),
             DeclareLaunchArgument("track_concurrency", default_value="4"),
+            DeclareLaunchArgument(
+                "track_bucket_min_objects", default_value="4"
+            ),
+            DeclareLaunchArgument("track_bucket_size", default_value="1"),
             DeclareLaunchArgument("viewer", default_value="true"),
             Node(
                 package="sam3_trt_ros",
@@ -123,6 +131,12 @@ def generate_launch_description() -> LaunchDescription:
                         "max_objects": 8,
                         "track_concurrency": ParameterValue(
                             track_concurrency, value_type=int
+                        ),
+                        "track_bucket_min_objects": ParameterValue(
+                            track_bucket_min_objects, value_type=int
+                        ),
+                        "track_bucket_size": ParameterValue(
+                            track_bucket_size, value_type=int
                         ),
                         "pipeline_overlap": ParameterValue(
                             pipeline_overlap, value_type=bool
