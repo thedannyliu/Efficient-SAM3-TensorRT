@@ -18,6 +18,7 @@ def generate_launch_description() -> LaunchDescription:
         "pipeline_overlap_max_objects"
     )
     shared_memory_poll_hz = LaunchConfiguration("shared_memory_poll_hz")
+    shared_view_poll_hz = LaunchConfiguration("shared_view_poll_hz")
     smooth_camera_view = LaunchConfiguration("smooth_camera_view")
     track_concurrency = LaunchConfiguration("track_concurrency")
     viewer = LaunchConfiguration("viewer")
@@ -42,6 +43,7 @@ def generate_launch_description() -> LaunchDescription:
                 "pipeline_overlap_max_objects", default_value="1"
             ),
             DeclareLaunchArgument("shared_memory_poll_hz", default_value="240.0"),
+            DeclareLaunchArgument("shared_view_poll_hz", default_value="240.0"),
             DeclareLaunchArgument("smooth_camera_view", default_value="true"),
             DeclareLaunchArgument("track_concurrency", default_value="4"),
             DeclareLaunchArgument("viewer", default_value="true"),
@@ -56,6 +58,9 @@ def generate_launch_description() -> LaunchDescription:
                         "base_url": base_url,
                         "shared_memory_path": (
                             "/dev/shm/sam3_sam2_frame.bin"
+                        ),
+                        "shared_view_poll_hz": ParameterValue(
+                            shared_view_poll_hz, value_type=float
                         ),
                     }
                 ],

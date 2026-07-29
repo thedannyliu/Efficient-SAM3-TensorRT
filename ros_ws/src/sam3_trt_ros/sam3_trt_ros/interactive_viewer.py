@@ -33,6 +33,7 @@ class InteractiveViewer(Node):
         self.declare_parameter("display_max_width", 2560)
         self.declare_parameter("display_fps", 60.0)
         self.declare_parameter("opengl_view", False)
+        self.declare_parameter("shared_view_poll_hz", 240.0)
         self.declare_parameter("smooth_camera_view", True)
         self.declare_parameter(
             "shared_memory_path", "/dev/shm/sam3_sam2_frame.bin"
@@ -113,6 +114,11 @@ class InteractiveViewer(Node):
         self.shared_reader_retry_time = 0.0
         self.display_fps = float(self.get_parameter("display_fps").value)
         self.opengl_view = bool(self.get_parameter("opengl_view").value)
+        self.shared_view_poll_hz = float(
+            self.get_parameter("shared_view_poll_hz").value
+        )
+        if self.shared_view_poll_hz <= 0.0:
+            raise ValueError("shared_view_poll_hz must be positive")
         if self.display_fps <= 0.0:
             raise ValueError("display_fps must be positive")
         self.display_period = 1.0 / self.display_fps
@@ -167,7 +173,9 @@ class InteractiveViewer(Node):
             String, "/sam3_viewer/render_metrics", 10
         )
         if self.smooth_camera_view:
-            self.create_timer(1.0 / 120.0, self.poll_shared_frame)
+            self.create_timer(
+                1.0 / self.shared_view_poll_hz, self.poll_shared_frame
+            )
         self.create_subscription(
             String,
             "/sam/result_json",
@@ -817,6 +825,7 @@ class InteractiveViewer(Node):
             "smooth_camera_view": self.smooth_camera_view,
             "opengl_view": self.opengl_view,
             "target_display_fps": self.display_fps,
+            "shared_view_poll_hz": self.shared_view_poll_hz,
             "render": render,
             "raw_unique_frames": raw,
             "stage_ms": self.stage_ms,
