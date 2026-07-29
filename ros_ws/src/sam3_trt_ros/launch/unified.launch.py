@@ -27,7 +27,7 @@ def generate_launch_description() -> LaunchDescription:
             ),
             DeclareLaunchArgument("display_max_width", default_value="2560"),
             DeclareLaunchArgument("default_mode", default_value="2"),
-            DeclareLaunchArgument("shared_memory_poll_hz", default_value="1000.0"),
+            DeclareLaunchArgument("shared_memory_poll_hz", default_value="240.0"),
             DeclareLaunchArgument("viewer", default_value="true"),
             Node(
                 package="sam3_trt_ros",
