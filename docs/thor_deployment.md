@@ -76,9 +76,7 @@ bash scripts/setup_thor_ros.sh
 Every new terminal uses:
 
 ```bash
-source /opt/ros/jazzy/setup.bash
-source ~/Efficient-SAM2-TensorRT/ros_ws/install/setup.bash
-source ~/Efficient-SAM3-TensorRT/ros_ws/install/setup.bash
+source ~/Efficient-SAM3-TensorRT/scripts/source_thor_ros_env.sh
 ```
 
 ## 5. Discover and lock the D455 profile
@@ -119,8 +117,7 @@ curl -s http://127.0.0.1:8767/status.json
 Launch the ROS adapter and viewer on the Thor desktop:
 
 ```bash
-source /opt/ros/jazzy/setup.bash
-source ~/Efficient-SAM3-TensorRT/ros_ws/install/setup.bash
+source ~/Efficient-SAM3-TensorRT/scripts/source_thor_ros_env.sh
 export DISPLAY=:0
 ros2 launch sam3_trt_ros instinctsam_native.launch.py
 ```
@@ -157,9 +154,7 @@ publishes the same source frames to both routes, so switching does not reopen
 the camera.
 
 ```bash
-source /opt/ros/jazzy/setup.bash
-source ~/Efficient-SAM2-TensorRT/ros_ws/install/setup.bash
-source ~/Efficient-SAM3-TensorRT/ros_ws/install/setup.bash
+source ~/Efficient-SAM3-TensorRT/scripts/source_thor_ros_env.sh
 export DISPLAY=:0
 ros2 launch sam3_trt_ros unified.launch.py
 ```
