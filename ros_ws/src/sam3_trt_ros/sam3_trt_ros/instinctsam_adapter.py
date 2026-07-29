@@ -23,6 +23,8 @@ class MjpegReader:
         self.url = url
         self.lock = Lock()
         self.stop = Event()
+        self.enabled = Event()
+        self.enabled.set()
         self.frame: np.ndarray | None = None
         self.sequence = 0
         self.capture: cv2.VideoCapture | None = None
@@ -31,10 +33,14 @@ class MjpegReader:
 
     def run(self) -> None:
         while not self.stop.is_set():
+            if not self.enabled.wait(0.2):
+                continue
+            if self.stop.is_set():
+                break
             capture = cv2.VideoCapture(self.url)
             capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
             self.capture = capture
-            while not self.stop.is_set():
+            while not self.stop.is_set() and self.enabled.is_set():
                 ok, frame = capture.read()
                 if not ok or frame is None:
                     break
@@ -44,15 +50,23 @@ class MjpegReader:
             capture.release()
             self.stop.wait(0.2)
 
+    def set_enabled(self, enabled: bool) -> None:
+        if enabled:
+            self.enabled.set()
+        else:
+            self.enabled.clear()
+
     def latest(self) -> tuple[int, np.ndarray | None]:
         with self.lock:
             return self.sequence, self.frame
 
     def close(self) -> None:
         self.stop.set()
-        if self.capture is not None:
-            self.capture.release()
+        self.enabled.set()
         self.thread.join(timeout=2.0)
+        if self.thread.is_alive() and self.capture is not None:
+            self.capture.release()
+            self.thread.join(timeout=2.0)
 
 
 class InstinctSAMAdapter(Node):
@@ -177,6 +191,7 @@ class InstinctSAMAdapter(Node):
 
     def on_mode(self, message: UInt8) -> None:
         self.hybrid_enabled = message.data == 2
+        self.overlay_reader.set_enabled(not self.hybrid_enabled)
 
     def on_set_hybrid_relay(
         self, request: SetBool.Request, response: SetBool.Response
