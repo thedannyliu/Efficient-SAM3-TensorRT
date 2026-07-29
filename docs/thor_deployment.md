@@ -171,6 +171,16 @@ TV5M SAM2 engine. If the GI service is already healthy, it is reused instead
 of being restarted. GI and the selected SAM2 model remain resident, so mode 2
 only performs first-frame detection and state transfer during normal tracking.
 
+Stop the complete ROS launch before rebuilding or starting another copy:
+
+```bash
+cd ~/Efficient-SAM3-TensorRT
+bash scripts/thor_stop_unified_desktop.sh
+```
+
+The start script refuses to create a second unified launch. This avoids two
+adapters and two SAM2 nodes decoding and processing the same camera stream.
+
 The launcher reads `DISPLAY`, `XAUTHORITY`, and `XDG_RUNTIME_DIR` from the
 logged-in GNOME session. Do not assume `DISPLAY=:0`; it was `:1` during the
 2026-07-28 Thor validation.
@@ -257,6 +267,13 @@ in mode 1.
 Mode 2 publishes only the SAM2 relay image, not a duplicate raw ROS image. The
 GI overlay MJPEG reader is also paused. These two omissions reduce image
 decode/copy/DDS work without changing model precision or masks.
+
+The current Mode 2 steady stream uses
+`/dev/shm/sam3_sam2_frame.bin` instead of serializing a 2.76 MB ROS Image
+between the Python adapter and C++ tracker. The file contains only the latest
+locked RGB8 frame and source stamp. The ROS image subscription remains active
+for the frozen point/box/text handoff frame. Do not delete the shared file
+while the pipeline is running; the adapter creates or resets it at startup.
 
 Point/box initialization gates the live relay, drains the preceding camera
 queue, and retries the same frozen timestamp until SAM2 confirms the new object.
