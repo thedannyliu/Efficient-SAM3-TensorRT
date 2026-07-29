@@ -125,7 +125,7 @@ class Handler(BaseHTTPRequestHandler):
         elif self.path == "/prompt":
             self.state.prompt = value["text"]
             self.send_json({"object_count": 1})
-        elif self.path in {"/add_box", "/reset"}:
+        elif self.path in {"/add_box", "/add_point", "/reset"}:
             self.send_json({"success": True})
         else:
             self.send_error(404)

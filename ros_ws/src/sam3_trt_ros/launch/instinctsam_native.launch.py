@@ -12,7 +12,7 @@ def generate_launch_description() -> LaunchDescription:
             DeclareLaunchArgument(
                 "base_url", default_value="http://127.0.0.1:8767"
             ),
-            DeclareLaunchArgument("display_max_width", default_value="1600"),
+            DeclareLaunchArgument("display_max_width", default_value="3840"),
             Node(
                 package="sam3_trt_ros",
                 executable="instinctsam_adapter",

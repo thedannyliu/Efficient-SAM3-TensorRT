@@ -15,7 +15,7 @@ from std_msgs.msg import String, UInt8
 from std_srvs.srv import SetBool, Trigger
 
 from sam31_trt.gi_client import InstinctSAMClient
-from sam3_trt_msgs.srv import AddBox, SetTextPrompt
+from sam3_trt_msgs.srv import AddBox, AddPoint, SetTextPrompt
 
 
 class MjpegReader:
@@ -107,6 +107,7 @@ class InstinctSAMAdapter(Node):
             SetTextPrompt, "/instinctsam/set_text", self.on_set_text
         )
         self.create_service(AddBox, "/instinctsam/add_box", self.on_add_box)
+        self.create_service(AddPoint, "/instinctsam/add_point", self.on_add_point)
         self.create_service(Trigger, "/instinctsam/reset", self.on_reset)
         self.create_service(
             SetBool, "/instinctsam/set_hybrid_relay", self.on_set_hybrid_relay
@@ -141,9 +142,11 @@ class InstinctSAMAdapter(Node):
             self.height, self.width = raw.shape[:2]
             if raw_sequence != self.last_raw_sequence:
                 message = self.image_message(raw, stamp)
-                self.raw_publisher.publish(message)
-                if self.hybrid_enabled and not self.relay_gated:
-                    self.relay_publisher.publish(message)
+                if self.hybrid_enabled:
+                    if not self.relay_gated:
+                        self.relay_publisher.publish(message)
+                else:
+                    self.raw_publisher.publish(message)
                 self.last_raw_sequence = raw_sequence
             if overlay_sequence != self.last_overlay_sequence:
                 self.overlay_publisher.publish(self.image_message(overlay, stamp))
@@ -221,6 +224,23 @@ class InstinctSAMAdapter(Node):
             )
             response.success = True
             response.message = "box accepted"
+        except Exception as error:
+            response.message = str(error)
+        return response
+
+    def on_add_point(
+        self, request: AddPoint.Request, response: AddPoint.Response
+    ) -> AddPoint.Response:
+        if self.width < 1 or self.height < 1:
+            response.message = "no source frame is available"
+            return response
+        try:
+            self.client.add_point(
+                max(0.0, min(request.x / self.width, 1.0)),
+                max(0.0, min(request.y / self.height, 1.0)),
+            )
+            response.success = True
+            response.message = "point accepted"
         except Exception as error:
             response.message = str(error)
         return response

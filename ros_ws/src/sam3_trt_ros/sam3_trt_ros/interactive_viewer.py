@@ -13,13 +13,14 @@ from sensor_msgs.msg import Image
 from std_msgs.msg import String, UInt8
 from std_srvs.srv import Trigger
 
-from sam3_trt_msgs.srv import AddBox, SetPipelineMode, SetTextPrompt
+from sam3_trt_msgs.srv import AddBox, AddPoint, SetPipelineMode, SetTextPrompt
 
 
 class InteractiveViewer(Node):
     def __init__(self) -> None:
         super().__init__("sam3_trt_interactive_viewer")
-        self.declare_parameter("display_max_width", 1600)
+        self.declare_parameter("display_scale", 3.0)
+        self.declare_parameter("display_max_width", 3840)
         self.declare_parameter("confidence", 0.5)
         self.mode = 1
         self.bridge = CvBridge()
@@ -32,9 +33,10 @@ class InteractiveViewer(Node):
         self.drag_current: tuple[int, int] | None = None
         self.entering_text = False
         self.text = ""
-        self.status = "t=text, drag=box, r=reset, q=quit"
+        self.status = "t=text, click=point, drag=box, r=reset, q=quit"
         self.metrics: dict[str, object] = {}
         self.display_max_width = int(self.get_parameter("display_max_width").value)
+        self.display_scale = float(self.get_parameter("display_scale").value)
         self.confidence = float(self.get_parameter("confidence").value)
         self.create_subscription(
             Image,
@@ -78,7 +80,14 @@ class InteractiveViewer(Node):
             1: self.create_client(Trigger, "/instinctsam/reset"),
             2: self.create_client(Trigger, "/hybrid/reset"),
         }
-        self.box_client = self.create_client(AddBox, "/instinctsam/add_box")
+        self.box_clients = {
+            1: self.create_client(AddBox, "/instinctsam/add_box"),
+            2: self.create_client(AddBox, "/hybrid/add_box"),
+        }
+        self.point_clients = {
+            1: self.create_client(AddPoint, "/instinctsam/add_point"),
+            2: self.create_client(AddPoint, "/hybrid/add_point"),
+        }
         self.mode_client = self.create_client(
             SetPipelineMode, "/sam3_pipeline/set_mode"
         )
@@ -121,7 +130,7 @@ class InteractiveViewer(Node):
         return x / self.scale, y / self.scale
 
     def on_mouse(self, event: int, x: int, y: int, flags: int, _: object) -> None:
-        if self.mode == 2 or self.entering_text or self.frame is None:
+        if self.entering_text or self.frame is None:
             return
         point = self.to_source(x, y)
         if event == cv2.EVENT_LBUTTONDOWN:
@@ -135,21 +144,38 @@ class InteractiveViewer(Node):
             start = self.drag_start
             self.drag_start = None
             self.drag_current = None
-            if abs(end[0] - start[0]) < 5 or abs(end[1] - start[1]) < 5:
+            dx = abs(end[0] - start[0])
+            dy = abs(end[1] - start[1])
+            if max(dx, dy) < 5:
+                self.send_point(end)
+                return
+            if dx < 5 or dy < 5:
                 self.status = "box must be at least 5x5 pixels"
                 return
             self.send_box(start, end)
 
     def send_box(self, start: tuple[int, int], end: tuple[int, int]) -> None:
-        if not self.box_client.service_is_ready():
+        client = self.box_clients[self.mode]
+        if not client.service_is_ready():
             self.status = "box service is not ready"
             return
         request = AddBox.Request()
         request.x0, request.x1 = sorted((float(start[0]), float(end[0])))
         request.y0, request.y1 = sorted((float(start[1]), float(end[1])))
-        future = self.box_client.call_async(request)
+        future = client.call_async(request)
         future.add_done_callback(self.on_action_response)
         self.status = "sending box"
+
+    def send_point(self, point: tuple[int, int]) -> None:
+        client = self.point_clients[self.mode]
+        if not client.service_is_ready():
+            self.status = "point service is not ready"
+            return
+        request = AddPoint.Request()
+        request.x, request.y = float(point[0]), float(point[1])
+        future = client.call_async(request)
+        future.add_done_callback(self.on_action_response)
+        self.status = "sending positive point"
 
     def send_text(self) -> None:
         text = self.text.strip()
@@ -223,9 +249,22 @@ class InteractiveViewer(Node):
     def display(self) -> None:
         if self.frame is None:
             return
-        rendered = self.frame.copy()
+        self.scale = min(
+            self.display_scale,
+            self.display_max_width / self.frame.shape[1],
+        )
+        rendered = cv2.resize(
+            self.frame,
+            (
+                int(self.frame.shape[1] * self.scale),
+                int(self.frame.shape[0] * self.scale),
+            ),
+            interpolation=cv2.INTER_LINEAR,
+        )
         if self.drag_start is not None and self.drag_current is not None:
-            cv2.rectangle(rendered, self.drag_start, self.drag_current, (0, 255, 255), 2)
+            start = tuple(int(value * self.scale) for value in self.drag_start)
+            current = tuple(int(value * self.scale) for value in self.drag_current)
+            cv2.rectangle(rendered, start, current, (0, 255, 255), 2)
         lines = [f"Mode {self.mode} | 1=GI SAM3  2=GI->SAM2", self.status]
         if self.entering_text:
             lines.append(f"> {self.text}_")
@@ -256,16 +295,6 @@ class InteractiveViewer(Node):
                 (0, 255, 255),
                 2,
                 cv2.LINE_AA,
-            )
-        self.scale = min(1.0, self.display_max_width / rendered.shape[1])
-        if self.scale != 1.0:
-            rendered = cv2.resize(
-                rendered,
-                (
-                    int(rendered.shape[1] * self.scale),
-                    int(rendered.shape[0] * self.scale),
-                ),
-                interpolation=cv2.INTER_AREA,
             )
         cv2.imshow(self.window_name, rendered)
         self.handle_key(cv2.waitKeyEx(1))

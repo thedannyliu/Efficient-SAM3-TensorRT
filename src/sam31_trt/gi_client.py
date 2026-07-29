@@ -92,6 +92,13 @@ class InstinctSAMClient:
         )
         return value if isinstance(value, dict) else {"response": value}
 
+    def add_point(self, x: float, y: float) -> dict[str, Any]:
+        value = self._request(
+            "/add_point",
+            {"point": [float(x), float(y)]},
+        )
+        return value if isinstance(value, dict) else {"response": value}
+
     def reset(self) -> dict[str, Any]:
         value = self._request("/reset", {})
         return value if isinstance(value, dict) else {"response": value}

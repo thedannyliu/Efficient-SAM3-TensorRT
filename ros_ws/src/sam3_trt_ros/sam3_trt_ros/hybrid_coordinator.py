@@ -23,7 +23,7 @@ from std_srvs.srv import SetBool, Trigger
 from sam2_trt_msgs.srv import AddObject
 from sam31_trt.gi_client import InstinctSAMClient
 from sam31_trt.handoff import select_handoff_objects
-from sam3_trt_msgs.srv import SetPipelineMode, SetTextPrompt
+from sam3_trt_msgs.srv import AddBox, AddPoint, SetPipelineMode, SetTextPrompt
 
 
 class HybridCoordinator(Node):
@@ -47,6 +47,7 @@ class HybridCoordinator(Node):
         self.handoff_lock = Lock()
         self.expected_stamp = 0
         self.expected_objects = 0
+        self.current_objects = 0
         self.initialized = Event()
         self.sam2_ready = Event()
         frozen_qos = QoSProfile(
@@ -91,6 +92,18 @@ class HybridCoordinator(Node):
             callback_group=callback_group,
         )
         self.create_service(
+            AddBox,
+            "/hybrid/add_box",
+            self.on_add_box,
+            callback_group=callback_group,
+        )
+        self.create_service(
+            AddPoint,
+            "/hybrid/add_point",
+            self.on_add_point,
+            callback_group=callback_group,
+        )
+        self.create_service(
             Trigger,
             "/hybrid/reset",
             self.on_reset,
@@ -107,6 +120,7 @@ class HybridCoordinator(Node):
     def on_mode(self, message: UInt8) -> None:
         enabled = message.data == SetPipelineMode.Request.HYBRID
         self.enabled = enabled
+        self.current_objects = 0
         if enabled:
             self.sam2_ready.clear()
         if self.relay_client.service_is_ready():
@@ -121,6 +135,7 @@ class HybridCoordinator(Node):
             value = json.loads(message.data)
         except json.JSONDecodeError:
             return
+        self.current_objects = len(value.get("objects", []))
         self.sam2_ready.set()
         if (
             int(value.get("stamp_ns", 0)) == self.expected_stamp
@@ -162,6 +177,92 @@ class HybridCoordinator(Node):
     def resume(self) -> None:
         if self.enabled:
             self.set_relay(True)
+
+    def frozen_frame(self) -> Image:
+        jpeg = self.client.raw_jpeg()
+        frame = cv2.imdecode(
+            np.frombuffer(jpeg, dtype=np.uint8), cv2.IMREAD_COLOR
+        )
+        if frame is None:
+            raise RuntimeError("InstinctSAM snapshot is not a valid JPEG")
+        frozen = self.bridge.cv2_to_imgmsg(frame, encoding="bgr8")
+        frozen.header.stamp = self.get_clock().now().to_msg()
+        return frozen
+
+    def add_geometry(
+        self, kind: int, x0: float, y0: float, x1: float, y1: float
+    ) -> None:
+        if not self.enabled:
+            raise RuntimeError("hybrid pipeline is inactive; press 2 first")
+        timeout = float(self.get_parameter("initialization_timeout").value)
+        if not self.sam2_ready.wait(timeout):
+            raise TimeoutError("SAM2 did not become ready after mode switch")
+        self.set_relay(False)
+        frozen = self.frozen_frame()
+        request = AddObject.Request()
+        request.kind = kind
+        request.x0 = x0
+        request.y0 = y0
+        request.x1 = x1
+        request.y1 = y1
+        add_response = self.call(self.add_client, request, "/sam/add_object")
+        if not add_response.success:
+            raise RuntimeError(f"/sam/add_object failed: {add_response.message}")
+        self.expected_stamp = self.stamp_ns(frozen)
+        self.expected_objects = self.current_objects + 1
+        self.initialized.clear()
+        self.relay.publish(frozen)
+        if not self.initialized.wait(timeout):
+            raise TimeoutError("SAM2 did not initialize geometry on the frozen frame")
+        self.resume()
+
+    def on_add_box(
+        self, request: AddBox.Request, response: AddBox.Response
+    ) -> AddBox.Response:
+        if not self.handoff_lock.acquire(blocking=False):
+            response.message = "another handoff is in progress"
+            return response
+        try:
+            x0, x1 = sorted((request.x0, request.x1))
+            y0, y1 = sorted((request.y0, request.y1))
+            if x1 - x0 < 1 or y1 - y0 < 1:
+                raise ValueError("box is too small")
+            self.add_geometry(AddObject.Request.BOX, x0, y0, x1, y1)
+            response.success = True
+            response.message = "SAM2 box accepted"
+        except Exception as error:
+            self.resume()
+            response.message = str(error)
+        finally:
+            self.expected_stamp = 0
+            self.expected_objects = 0
+            self.handoff_lock.release()
+        return response
+
+    def on_add_point(
+        self, request: AddPoint.Request, response: AddPoint.Response
+    ) -> AddPoint.Response:
+        if not self.handoff_lock.acquire(blocking=False):
+            response.message = "another handoff is in progress"
+            return response
+        try:
+            self.add_geometry(
+                AddObject.Request.POINT,
+                request.x,
+                request.y,
+                request.x,
+                request.y,
+            )
+            response.success = True
+            response.message = "SAM2 point accepted"
+        except Exception as error:
+            self.resume()
+            response.message = str(error)
+        finally:
+            self.expected_stamp = 0
+            self.expected_objects = 0
+            self.handoff_lock.release()
+        return response
 
     def on_set_text(
         self, request: SetTextPrompt.Request, response: SetTextPrompt.Response
@@ -287,6 +388,7 @@ class HybridCoordinator(Node):
     ) -> Trigger.Response:
         try:
             self.reset_sam2()
+            self.current_objects = 0
             response.success = True
             response.message = "reset"
         except Exception as error:

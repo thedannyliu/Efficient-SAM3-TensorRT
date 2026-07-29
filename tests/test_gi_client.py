@@ -43,7 +43,7 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
             return
-        if self.path in {"/thresh", "/prompt", "/add_box"}:
+        if self.path in {"/thresh", "/prompt", "/add_box", "/add_point"}:
             body = b'{"ok":true}'
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
@@ -114,12 +114,14 @@ class InstinctSAMClientTest(unittest.TestCase):
         Handler.requests.clear()
         self.client.set_prompt("monitor", 0.4)
         self.client.add_box(0.1, 0.2, 0.8, 0.9)
+        self.client.add_point(0.25, 0.75)
         self.assertEqual(
             Handler.requests,
             [
                 ("/thresh", {"detect": 0.4}),
                 ("/prompt", {"text": "monitor"}),
                 ("/add_box", {"box": [0.1, 0.2, 0.8, 0.9]}),
+                ("/add_point", {"point": [0.25, 0.75]}),
             ],
         )
 
