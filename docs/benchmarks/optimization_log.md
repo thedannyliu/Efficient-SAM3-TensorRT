@@ -16,6 +16,8 @@ recall on the fixed workload is unchanged.
 | `opengl-scaled-viewer` | `1cc8594` | GI → TV5M SAM2, 1 object, displayed | Use the available Qt5 OpenGL HighGUI path to scale the 640x360 preview into the 2560x1440 interactive window | 27.218 FPS; inference 34.11 ms | 29.296 FPS; inference 29.46 ms | 13.6% inference | 7.6% | 48.30 → 39.18 ms (-18.9%) | rendering only | accept |
 | `shared-track-engine-contexts` | SAM2 `377dfb0` | GI → TV5M SAM2, 1 object, displayed | Deserialize one track engine and create eight independent execution contexts instead of eight engine copies | inference 29.462 ms; TV11 load 3523.9 ms | inference 29.443 ms; TV11 load 3246.9 ms | neutral inference; 7.9% load | not claimed | 39.18 → 37.11 ms; camera variance | same engine and per-object state | accept for initialization/resource use |
 | `shared-poll-1000hz` | `6a97a2c` / `a60e1cf` | GI → TV5M SAM2, 1 object, 848x480@60 displayed | Increase latest-frame header polling from 240 to 1000 Hz | source age 41.87 ms; inference 28.96 ms | source age 41.69 ms; inference 29.80 ms | not repeatable | not claimed | -0.19 ms (-0.4%) | same shared pixels | reject; retain configurable 240 Hz default |
+| `cross-frame-overlap` | `65dc282` | GI → TV5M SAM2, 1 object, 848x480@60 displayed | Encode the current frame while completing tracking for the preceding frame | inference 29.219 ms; 33.766 FPS | inference 26.225 ms; 37.641 FPS | 10.2% | 11.5% | 42.07 → 65.25 ms (+55.1%) | same operations and FP16 engines | optional throughput mode; keep low-latency default off |
+| `four-track-stream-limit` | `fab0c9e` | GI → TV5M SAM2, 8 objects, 848x480@60 displayed | Process at most four object contexts concurrently instead of eight | inference 166.75 ms; 5.993 FPS | inference 162.78 ms; 6.136 FPS | 2.4% | 2.4% | 181.58 → 176.86 ms (-2.6%) | same operations and FP16 engines | accept; unified default is 4 |
 
 The final two-object candidate is 2.413x the original ROS relay throughput
 (+141.3%), reduces source-age p95 by 71.9%, and reduces latest-slot overwrites
@@ -106,6 +108,57 @@ SSH collector retained 280 rows, which is sufficient for the capacity smoke
 but should be repeated for a formal three-run median. The model continues to
 process latest-only input, so drops are expected whenever capacity is below
 59.74 FPS and do not indicate an accumulating queue.
+
+## Background concurrency sweeps
+
+The current unified pipeline already overlaps work that does not change frame
+semantics:
+
+- the vendor camera reader and shared-memory writer run independently of SAM2;
+- image encoding uses the main CUDA stream while per-object state packing uses
+  object streams and waits on a CUDA event only where required;
+- independent object tracks use separate TensorRT execution contexts and CUDA
+  streams;
+- mask device-to-host copies use the corresponding object streams;
+- preview construction runs on a C++ worker thread; the OpenGL viewer runs in
+  its own process.
+
+Commit `65dc282` exposes the additional double-buffered cross-frame path as
+`pipeline_overlap:=true`. The following same-session A/B uses TV5M FP16,
+848x480@60 capture, the displayed OpenGL viewer, 100 warm-up outputs, and
+400 measured outputs for one and two objects. Four objects use 100 warm-up and
+300 measured outputs. Raw traces remain ignored on Thor under
+`results/benchmarks/camera60_{sync,overlap}_65dc282/`.
+
+| Objects | Sync inference / FPS / source age | Overlap inference / FPS / source age | FPS change | Source-age change |
+|---:|---|---|---:|---:|
+| 1 | 29.219 ms / 33.766 / 42.072 ms | 26.225 ms / 37.641 / 65.250 ms | +11.5% | +23.178 ms |
+| 2 | 46.667 ms / 21.356 / 61.250 ms | 45.429 ms / 21.923 / 105.665 ms | +2.7% | +44.415 ms |
+| 4 | 83.527 ms / 11.952 / 98.314 ms | 85.667 ms / 11.657 / 185.864 ms | -2.5% | +87.550 ms |
+
+Overlap is therefore useful only when single-object completed throughput is
+more important than interactive latency. Its fixed one-processed-frame delay
+becomes increasingly expensive as object count grows, and concurrent encoder
+and tracking kernels contend for the same GPU. The unified launch keeps it
+off by default.
+
+Commit `fab0c9e` also exposes `track_concurrency`. A four-object sweep used the
+synchronous path with otherwise identical settings:
+
+| Track concurrency | Completed FPS | Mean inference | Mean source age |
+|---:|---:|---:|---:|
+| 1 | 10.287 | 97.004 ms | 111.027 ms |
+| 2 | 11.493 | 86.835 ms | 101.008 ms |
+| 4 | 11.952 | 83.504 ms | 98.201 ms |
+| 8 | 11.952 | 83.527 ms | 98.314 ms |
+
+Four concurrent contexts saturate the useful four-object parallelism. For
+eight objects, three repetitions of 150 measured outputs found concurrency 4
+at 6.136 FPS and 162.78 ms mean inference, versus 5.993 FPS and 166.75 ms for
+concurrency 8. Processing two groups of four avoids enough GPU contention to
+improve both throughput and source age without changing masks. The unified
+launch therefore defaults to `track_concurrency:=4`; the standalone SAM2
+launches retain their separately documented defaults.
 
 ## Runtime selector smoke
 
