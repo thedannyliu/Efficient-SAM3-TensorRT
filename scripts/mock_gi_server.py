@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import cv2
@@ -77,6 +78,25 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
+            return
+        if self.path in {"/raw.mjpg", "/track.mjpg"}:
+            self.send_response(200)
+            self.send_header(
+                "Content-Type", "multipart/x-mixed-replace; boundary=frame"
+            )
+            self.end_headers()
+            try:
+                while True:
+                    body = self.state.jpeg
+                    self.wfile.write(b"--frame\r\nContent-Type: image/jpeg\r\n")
+                    self.wfile.write(
+                        f"Content-Length: {len(body)}\r\n\r\n".encode()
+                    )
+                    self.wfile.write(body + b"\r\n")
+                    self.wfile.flush()
+                    time.sleep(0.05)
+            except (BrokenPipeError, ConnectionResetError):
+                pass
             return
         self.send_error(404)
 

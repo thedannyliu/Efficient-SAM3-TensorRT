@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from threading import Event, Lock, Thread
 from time import perf_counter
 
 import cv2
@@ -17,6 +18,43 @@ from sam31_trt.gi_client import InstinctSAMClient
 from sam3_trt_msgs.srv import AddBox, SetTextPrompt
 
 
+class MjpegReader:
+    def __init__(self, url: str) -> None:
+        self.url = url
+        self.lock = Lock()
+        self.stop = Event()
+        self.frame: np.ndarray | None = None
+        self.sequence = 0
+        self.capture: cv2.VideoCapture | None = None
+        self.thread = Thread(target=self.run, daemon=True)
+        self.thread.start()
+
+    def run(self) -> None:
+        while not self.stop.is_set():
+            capture = cv2.VideoCapture(self.url)
+            capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+            self.capture = capture
+            while not self.stop.is_set():
+                ok, frame = capture.read()
+                if not ok or frame is None:
+                    break
+                with self.lock:
+                    self.frame = frame
+                    self.sequence += 1
+            capture.release()
+            self.stop.wait(0.2)
+
+    def latest(self) -> tuple[int, np.ndarray | None]:
+        with self.lock:
+            return self.sequence, self.frame
+
+    def close(self) -> None:
+        self.stop.set()
+        if self.capture is not None:
+            self.capture.release()
+        self.thread.join(timeout=2.0)
+
+
 class InstinctSAMAdapter(Node):
     def __init__(self) -> None:
         super().__init__("instinctsam_adapter")
@@ -28,8 +66,10 @@ class InstinctSAMAdapter(Node):
         self.client = InstinctSAMClient(base_url, timeout=timeout)
         self.base_url = base_url
         self.bridge = CvBridge()
-        self.raw_capture = self.open_capture("raw.mjpg")
-        self.overlay_capture = self.open_capture("track.mjpg")
+        self.raw_reader = MjpegReader(f"{base_url}/raw.mjpg")
+        self.overlay_reader = MjpegReader(f"{base_url}/track.mjpg")
+        self.last_raw_sequence = 0
+        self.last_overlay_sequence = 0
         self.width = 0
         self.height = 0
         self.raw_publisher = self.create_publisher(
@@ -50,24 +90,6 @@ class InstinctSAMAdapter(Node):
         self.create_timer(1.0 / poll_fps, self.poll)
         self.get_logger().info(f"bridging InstinctSAM at {base_url}")
 
-    def open_capture(self, path: str) -> cv2.VideoCapture:
-        capture = cv2.VideoCapture(f"{self.base_url}/{path}")
-        capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-        return capture
-
-    def read_capture(
-        self, capture: cv2.VideoCapture, path: str
-    ) -> tuple[cv2.VideoCapture, np.ndarray]:
-        ok, frame = capture.read()
-        if ok and frame is not None:
-            return capture, frame
-        capture.release()
-        capture = self.open_capture(path)
-        ok, frame = capture.read()
-        if not ok or frame is None:
-            raise RuntimeError(f"cannot read InstinctSAM /{path}")
-        return capture, frame
-
     def publish_frame(self, publisher: object, frame: np.ndarray, stamp: object) -> None:
         message = self.bridge.cv2_to_imgmsg(frame, encoding="bgr8")
         message.header.stamp = stamp
@@ -77,16 +99,23 @@ class InstinctSAMAdapter(Node):
         start = perf_counter()
         try:
             stamp = self.get_clock().now().to_msg()
-            self.raw_capture, raw = self.read_capture(
-                self.raw_capture, "raw.mjpg"
-            )
-            self.overlay_capture, overlay = self.read_capture(
-                self.overlay_capture, "track.mjpg"
-            )
+            raw_sequence, raw = self.raw_reader.latest()
+            overlay_sequence, overlay = self.overlay_reader.latest()
+            if raw is None or overlay is None:
+                raise RuntimeError("waiting for InstinctSAM MJPEG streams")
+            if (
+                raw_sequence == self.last_raw_sequence
+                and overlay_sequence == self.last_overlay_sequence
+            ):
+                return
             status = self.client.status()
             self.height, self.width = raw.shape[:2]
-            self.publish_frame(self.raw_publisher, raw, stamp)
-            self.publish_frame(self.overlay_publisher, overlay, stamp)
+            if raw_sequence != self.last_raw_sequence:
+                self.publish_frame(self.raw_publisher, raw, stamp)
+                self.last_raw_sequence = raw_sequence
+            if overlay_sequence != self.last_overlay_sequence:
+                self.publish_frame(self.overlay_publisher, overlay, stamp)
+                self.last_overlay_sequence = overlay_sequence
             status.update(
                 {
                     "schema_version": 1,
@@ -124,8 +153,8 @@ class InstinctSAMAdapter(Node):
         return response
 
     def destroy_node(self) -> bool:
-        self.raw_capture.release()
-        self.overlay_capture.release()
+        self.raw_reader.close()
+        self.overlay_reader.close()
         return super().destroy_node()
 
     def on_add_box(
