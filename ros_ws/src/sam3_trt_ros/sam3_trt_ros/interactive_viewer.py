@@ -619,7 +619,7 @@ class InteractiveViewer(Node):
         now = perf_counter()
         if smooth_mode:
             if now < self.next_display_time:
-                self.handle_key(cv2.waitKeyEx(1))
+                self.handle_key(cv2.pollKey())
                 return
             missed_periods = max(
                 0, int((now - self.next_display_time) / self.display_period)
@@ -635,7 +635,7 @@ class InteractiveViewer(Node):
         else:
             self.next_display_time = now
         if self.frame is None:
-            self.handle_key(cv2.waitKeyEx(1))
+            self.handle_key(cv2.pollKey())
             return
         frame_mode = self.mode if self.mode in self.frames else 0
         render_state = (
@@ -657,7 +657,7 @@ class InteractiveViewer(Node):
             self.label_version,
         )
         if render_state == self.last_render_state and not smooth_mode:
-            self.handle_key(cv2.waitKeyEx(1))
+            self.handle_key(cv2.pollKey())
             return
         self.last_render_state = render_state
         compose_start = perf_counter()
@@ -771,7 +771,7 @@ class InteractiveViewer(Node):
             cv2.resizeWindow(self.window_name, width, height)
             self.window_initialized = True
         wait_start = perf_counter()
-        key = cv2.waitKeyEx(1)
+        key = cv2.pollKey()
         self.stage_ms["wait_key"] = (
             perf_counter() - wait_start
         ) * 1000.0
