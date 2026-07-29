@@ -31,7 +31,7 @@ def generate_launch_description() -> LaunchDescription:
             DeclareLaunchArgument("default_mode", default_value="2"),
             DeclareLaunchArgument("pipeline_overlap", default_value="false"),
             DeclareLaunchArgument("shared_memory_poll_hz", default_value="240.0"),
-            DeclareLaunchArgument("track_concurrency", default_value="8"),
+            DeclareLaunchArgument("track_concurrency", default_value="4"),
             DeclareLaunchArgument("viewer", default_value="true"),
             Node(
                 package="sam3_trt_ros",
