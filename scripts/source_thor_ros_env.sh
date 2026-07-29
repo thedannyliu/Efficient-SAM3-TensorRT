@@ -11,6 +11,7 @@ esac
 source /opt/ros/jazzy/setup.bash
 source "$SAM2_ROOT/ros_ws/install/setup.bash"
 source "$THOR_VENV/bin/activate"
+export PYTHONPATH="$REPO_ROOT/src${PYTHONPATH:+:$PYTHONPATH}"
 if [[ -f "$REPO_ROOT/ros_ws/install/setup.bash" ]]; then
   source "$REPO_ROOT/ros_ws/install/setup.bash"
 fi
