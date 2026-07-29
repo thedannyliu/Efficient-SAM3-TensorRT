@@ -23,6 +23,7 @@ class InteractiveViewer(Node):
         self.declare_parameter("confidence", 0.5)
         self.mode = 1
         self.bridge = CvBridge()
+        self.canvas_size = (1280, 720)
         self.frames: dict[int, object] = {}
         self.frame_versions = {0: 0, 1: 0, 2: 0}
         self.last_render_state: object = None
@@ -121,6 +122,8 @@ class InteractiveViewer(Node):
 
     def on_image(self, mode: int, message: Image) -> None:
         frame = self.bridge.imgmsg_to_cv2(message, desired_encoding="bgr8")
+        if (frame.shape[1], frame.shape[0]) != self.canvas_size:
+            frame = cv2.resize(frame, self.canvas_size, interpolation=cv2.INTER_LINEAR)
         self.frame_versions[mode] += 1
         if mode == 0:
             self.raw_frame = frame

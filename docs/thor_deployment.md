@@ -193,9 +193,12 @@ Controls:
 
 The viewer initially opens at 2560x1440. Use a preset or drag any window edge
 or corner to choose another size; image, status text, and prompt overlays scale
-together. Rendering remains at the 1280x720 source resolution and the GUI
-performs the display scaling. Mouse callbacks are already returned in source
-image coordinates, so point/box prompts remain aligned at every display size.
+together. Both modes are normalized to one 1280x720 interaction canvas before
+rendering (the native GI overlay is 1280x720 while the SAM2 preview is
+640x360), and the GUI performs only the final display scaling. This keeps text
+at the same visual size when switching modes. Mouse callbacks are returned in
+the shared canvas/source coordinates, so point/box prompts remain aligned at
+every display size.
 Override the initial preset selection with `display_max_width:=WIDTH`.
 
 Mode 1 keeps the vendor FPS watermark at the top-left and places only our mode
