@@ -98,6 +98,7 @@ class InstinctSAMAdapter(Node):
         self.declare_parameter("status_fps", 5.0)
         self.declare_parameter("http_timeout", 1.0)
         self.declare_parameter("gstreamer_mjpeg_decode", True)
+        self.declare_parameter("native_raw_stream", True)
         self.declare_parameter("relay_topic", "/hybrid/camera/image_raw")
         self.declare_parameter("shared_memory_path", "")
         self.declare_parameter("shared_memory_max_bytes", 8 * 1024 * 1024)
@@ -137,8 +138,10 @@ class InstinctSAMAdapter(Node):
         self.published_frames = 0
         self.rate_time = perf_counter()
         self.rate_reader_sequence = 0
+        self.rate_overlay_sequence = 0
         self.rate_published_frames = 0
         self.raw_reader_fps = 0.0
+        self.overlay_reader_fps = 0.0
         self.image_publish_fps = 0.0
         self.image_copy_ms = 0.0
         self.image_publish_ms = 0.0
@@ -192,7 +195,12 @@ class InstinctSAMAdapter(Node):
 
     def update_readers(self) -> None:
         enabled = self.vendor_ready and self.mode_received
-        self.raw_reader.set_enabled(enabled)
+        native_raw_stream = bool(
+            self.get_parameter("native_raw_stream").value
+        )
+        self.raw_reader.set_enabled(
+            enabled and (self.hybrid_enabled or native_raw_stream)
+        )
         self.overlay_reader.set_enabled(enabled and not self.hybrid_enabled)
 
     def poll_images(self) -> None:
@@ -240,6 +248,7 @@ class InstinctSAMAdapter(Node):
                 overlay is not None
                 and overlay_sequence != self.last_overlay_sequence
             ):
+                self.height, self.width = overlay.shape[:2]
                 self.overlay_publisher.publish(self.image_message(overlay, stamp))
                 self.last_overlay_sequence = overlay_sequence
 
@@ -252,6 +261,7 @@ class InstinctSAMAdapter(Node):
                 self.update_readers()
                 self.get_logger().info("InstinctSAM API is ready")
             raw_sequence, _ = self.raw_reader.latest()
+            overlay_sequence, _ = self.overlay_reader.latest()
             now = perf_counter()
             rate_duration = now - self.rate_time
             if rate_duration >= 1.0:
@@ -261,8 +271,12 @@ class InstinctSAMAdapter(Node):
                 self.image_publish_fps = (
                     self.published_frames - self.rate_published_frames
                 ) / rate_duration
+                self.overlay_reader_fps = (
+                    overlay_sequence - self.rate_overlay_sequence
+                ) / rate_duration
                 self.rate_time = now
                 self.rate_reader_sequence = raw_sequence
+                self.rate_overlay_sequence = overlay_sequence
                 self.rate_published_frames = self.published_frames
             stamp = self.get_clock().now().to_msg()
             status.update(
@@ -273,7 +287,9 @@ class InstinctSAMAdapter(Node):
                     "source_height": self.height,
                     "adapter_poll_ms": (perf_counter() - start) * 1000.0,
                     "raw_reader_fps": self.raw_reader_fps,
+                    "overlay_reader_fps": self.overlay_reader_fps,
                     "raw_decode_backend": self.raw_reader.backend,
+                    "overlay_decode_backend": self.overlay_reader.backend,
                     "image_publish_fps": self.image_publish_fps,
                     "image_copy_ms": self.image_copy_ms,
                     "image_publish_ms": self.image_publish_ms,

@@ -14,6 +14,7 @@ def generate_launch_description() -> LaunchDescription:
     display_max_width = LaunchConfiguration("display_max_width")
     default_mode = LaunchConfiguration("default_mode")
     gstreamer_mjpeg_decode = LaunchConfiguration("gstreamer_mjpeg_decode")
+    native_raw_stream = LaunchConfiguration("native_raw_stream")
     opengl_view = LaunchConfiguration("opengl_view")
     pipeline_overlap = LaunchConfiguration("pipeline_overlap")
     pipeline_overlap_max_objects = LaunchConfiguration(
@@ -51,6 +52,7 @@ def generate_launch_description() -> LaunchDescription:
             DeclareLaunchArgument(
                 "gstreamer_mjpeg_decode", default_value="false"
             ),
+            DeclareLaunchArgument("native_raw_stream", default_value="true"),
             DeclareLaunchArgument("opengl_view", default_value="false"),
             DeclareLaunchArgument("pipeline_overlap", default_value="false"),
             DeclareLaunchArgument(
@@ -78,6 +80,9 @@ def generate_launch_description() -> LaunchDescription:
                         "base_url": base_url,
                         "gstreamer_mjpeg_decode": ParameterValue(
                             gstreamer_mjpeg_decode, value_type=bool
+                        ),
+                        "native_raw_stream": ParameterValue(
+                            native_raw_stream, value_type=bool
                         ),
                         "shared_memory_path": (
                             "/dev/shm/sam3_sam2_frame.bin"
