@@ -189,22 +189,21 @@ The unified launch defaults to mode 2 so an idle UI does not continuously run
 the full InstinctSAM backbone. Press `1` when native SAM3 tracking is needed;
 press `2` to return to the lower-power capture/hybrid path.
 
-The measured defaults use four concurrent object contexts, the object-count
-TensorRT router, and the adaptive display router:
+The interactive defaults use four concurrent object contexts, synchronous
+tracking, synchronized previews, and no adaptive display throttling:
 
 ```bash
 bash scripts/thor_start_unified_desktop.sh \
-  track_concurrency:=4 pipeline_overlap:=true \
-  pipeline_overlap_max_objects:=1 adaptive_display_fps:=true
+  track_concurrency:=4 pipeline_overlap:=false \
+  smooth_camera_view:=false adaptive_display_fps:=false
 ```
 
 For one object, overlap raised the isolated 848x480@60 completed rate from
 33.766 to 37.641 FPS but increased mean source age from 42.072 to 65.250 ms.
 At two objects the gain was only 2.7% while source age increased by 44.4 ms,
-and at four objects overlap was slower. The router therefore uses overlap only
-for one object and changes to synchronous tracking at two or more without
-clearing object memories or IDs. Use `pipeline_overlap:=false` when the lowest
-single-object mask age matters more than throughput.
+and at four objects overlap was slower. It also adds one explicit mask-delay
+frame. Set `pipeline_overlap:=true pipeline_overlap_max_objects:=1` only for a
+throughput-oriented one-object benchmark.
 
 TensorRT object batching is a separate experimental switch:
 
@@ -267,15 +266,17 @@ Thor validation on 2026-07-29 found that model changes take 2.2–2.7 s. Camera
 changes take 87.7–92.8 s because the complete licensed GI runtime reloads.
 The menu therefore reports requested and observed camera FPS separately.
 848x480@60 reached 60.3 capture FPS and is the recommended latency/capacity
-profile with the smooth shared-camera viewer. Use 1280x720@30 when spatial
-detail matters more than motion cadence. The D455 does not expose 60 FPS at
-1280x720, so that unsupported combination is not offered.
+profile. Use 1280x720@30 when spatial detail matters more than motion cadence.
+The D455 does not expose 60 FPS at 1280x720, so that unsupported combination
+is not offered.
 
-Mode 2's displayed camera is intentionally decoupled from model results. The
-adapter writes the latest raw RGB frame to shared memory, SAM2 publishes a
-small label image, and the viewer composites the newest available pair. With
-848x480@60 capture, the measured idle render was 59.23 FPS with 0.78 ms
-interval standard deviation.
+Mode 2 defaults to the synchronized SAM2 preview: each displayed source frame
+is paired with the mask computed from that exact frame. This removes the
+moving-camera ghost where a mask from frame `t-1` was drawn on the latest raw
+frame `t`. The tradeoff is that the complete view updates at tracking FPS.
+For a smooth camera at the cost of spatially stale masks, launch with
+`smooth_camera_view:=true`; that path reads the latest raw RGB frame from
+shared memory and composites the newest available label image.
 
 When masks are active, desktop painting and TensorRT contend for compute.
 The original `adaptive_display_fps:=true` rule selected 28 FPS for one object
@@ -293,9 +294,10 @@ ros2 topic echo /sam3_viewer/render_metrics --once --field data
 ros2 topic echo /sam/result_json --once --field data
 ```
 
-The first reports configured/active display FPS, interval jitter, unique raw
-camera cadence, and compose/paint timing. The second reports model latency,
-tracking FPS, source age, object IDs, and whether overlap is currently active.
+The first reports configured/active display FPS, interval jitter, and
+compose/paint timing. It also reports unique raw camera cadence when the smooth
+shared-camera view is enabled. The second reports model latency, tracking FPS,
+source age, object IDs, and whether overlap is currently active.
 
 Both modes draw the same normalized metrics at the bottom:
 `model ms`, `tracking FPS`, `capacity FPS`, backend, `render FPS`, and
@@ -369,6 +371,12 @@ backbone-plus-tracker time. `chair` produced five objects on `multiplex` at
 therefore faster. Brief inversions immediately after reset are caused by the
 vendor's 0.9 EMA retaining re-anchor/backend-switch frames; use capacity FPS
 and stabilized tracking FPS for router comparisons.
+
+The synchronized Mode 2 default was validated with two `chair` objects:
+57.36 ms model time, 15.78 tracking FPS, 15.87 render FPS, 72.00 ms source
+age, `pipeline_overlap=false`, and zero delayed frames. This configuration
+displays an older complete frame rather than drawing an older mask on a newer
+camera frame.
 
 See `docs/general_instinct_runtime_review.md` for the delivered TensorRT
 boundary, effective optimizations, quality limits, and the recommended scope of
