@@ -780,40 +780,7 @@ class InteractiveViewer(Node):
             )
             lines.append("Esc=cancel")
         runtime = runtime_metrics(self.metrics)
-        if self.metrics:
-            metric_parts = []
-            if runtime["model_ms"] is not None:
-                metric_parts.append(
-                    f"model {float(runtime['model_ms']):.1f} ms"
-                )
-            if runtime["tracking_fps"] is not None:
-                metric_parts.append(
-                    f"tracking {float(runtime['tracking_fps']):.1f} FPS"
-                )
-            if runtime["capacity_fps"] is not None:
-                metric_parts.append(
-                    f"capacity {float(runtime['capacity_fps']):.1f} FPS"
-                )
-            if runtime["backend"] is not None:
-                metric_parts.append(str(runtime["backend"]))
-            if metric_parts:
-                lines.append(" | ".join(metric_parts))
-        display_parts = []
-        if self.render_fps > 0.0:
-            display_parts.append(f"render {self.render_fps:.1f} FPS")
-        if self.raw_view_fps > 0.0:
-            display_parts.append(f"raw {self.raw_view_fps:.1f} FPS")
-        if runtime["source_age_ms"] is not None:
-            display_parts.append(
-                f"source {float(runtime['source_age_ms']):.1f} ms"
-            )
-        if display_parts:
-            lines.append(" | ".join(display_parts))
-        first_line_y = (
-            rendered.shape[0] - 12 - (len(lines) - 1) * 28
-            if self.mode == SetPipelineMode.Request.INSTINCTSAM
-            else 28
-        )
+        first_line_y = rendered.shape[0] - 12 - (len(lines) - 1) * 28
         for index, line in enumerate(lines):
             cv2.putText(
                 rendered,
@@ -822,6 +789,31 @@ class InteractiveViewer(Node):
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.7,
                 (0, 255, 255),
+                2,
+                cv2.LINE_AA,
+            )
+        model_only_fps = runtime["capacity_fps"]
+        performance_lines = [
+            (
+                f"Screen {self.render_fps:.1f} FPS"
+                if self.render_fps > 0.0
+                else "Screen -- FPS"
+            ),
+            (
+                f"Model-only {float(model_only_fps):.1f} FPS"
+                if model_only_fps is not None
+                else "Model-only -- FPS"
+            ),
+        ]
+        cv2.rectangle(rendered, (0, 0), (330, 76), (0, 0, 0), -1)
+        for index, line in enumerate(performance_lines):
+            cv2.putText(
+                rendered,
+                line,
+                (12, 29 + index * 32),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.75,
+                (80, 230, 230),
                 2,
                 cv2.LINE_AA,
             )
