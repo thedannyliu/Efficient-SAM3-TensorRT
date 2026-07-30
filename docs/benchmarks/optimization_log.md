@@ -18,6 +18,11 @@ recall on the fixed workload is unchanged.
 | `shared-poll-1000hz` | `6a97a2c` / `a60e1cf` | GI → TV5M SAM2, 1 object, 848x480@60 displayed | Increase latest-frame header polling from 240 to 1000 Hz | source age 41.87 ms; inference 28.96 ms | source age 41.69 ms; inference 29.80 ms | not repeatable | not claimed | -0.19 ms (-0.4%) | same shared pixels | reject; retain configurable 240 Hz default |
 | `cross-frame-overlap` | `65dc282` | GI → TV5M SAM2, 1 object, 848x480@60 displayed | Encode the current frame while completing tracking for the preceding frame | inference 29.219 ms; 33.766 FPS | inference 26.225 ms; 37.641 FPS | 10.2% | 11.5% | 42.07 → 65.25 ms (+55.1%) | same operations and FP16 engines | optional throughput mode; keep low-latency default off |
 | `four-track-stream-limit` | `fab0c9e` | GI → TV5M SAM2, 8 objects, 848x480@60 displayed | Process at most four object contexts concurrently instead of eight | inference 166.75 ms; 5.993 FPS | inference 162.78 ms; 6.136 FPS | 2.4% | 2.4% | 181.58 → 176.86 ms (-2.6%) | same operations and FP16 engines | accept; unified default is 4 |
+| `native-pause-raw-mjpeg` | `da4fcb7` | GI native, 1 object | Decode only the displayed overlay MJPEG in mode 1 instead of decoding raw and overlay | 111.65 ms; 9.135 vendor FPS | 111.39 ms; 9.166 vendor FPS | 0.2% | 0.35% | not available from vendor API | displayed overlay unchanged | no material FPS gain; keep opt-in |
+| `current-bucket2` | `da4fcb7` / SAM2 `a77543a` | GI → TV5M SAM2, 4 objects | Replace four parallel batch-1 contexts with capacity-2 track buckets | 88.97 ms; 11.208 FPS | 185.69 ms; 5.380 FPS | -108.7% | -52.0% | 103.68 → 199.49 ms | same FP16 engines and object states | reject |
+| `current-bucket4` | `da4fcb7` / SAM2 `a77543a` | GI → TV5M SAM2, 4 objects | Replace four parallel batch-1 contexts with one capacity-4 track bucket | 88.97 ms; 11.208 FPS | 170.62 ms; 5.852 FPS | -91.8% | -47.8% | 103.68 → 184.95 ms | same FP16 engines and object states | reject |
+| `current-concurrency3` | `da4fcb7` / SAM2 `a77543a` | GI → TV5M SAM2, 4 fixed boxes | Process three object contexts concurrently instead of four | 88.88 ms; 11.208 FPS | 92.72 ms; 10.761 FPS | -4.3% | -4.0% | 103.14 → 107.69 ms | same FP16 engines and fixed prompts | reject; retain 4 |
+| `balanced-window-1600` | `0fe4c4f` | unified displayed UI | Open at 1600x900 instead of 2560x1440 | mode 2: 34.16 ms, 29.053 FPS; mode 1 render 6.49 FPS | mode 2: 32.49 ms, 30.460 FPS; mode 1 render 7.56 FPS | 4.9% mode-2 inference | 4.8% tracking; 16.6% mode-1 render | 48.09 → 46.49 ms | display size only; masks unchanged | accept as balanced default |
 
 The final two-object candidate is 2.413x the original ROS relay throughput
 (+141.3%), reduces source-age p95 by 71.9%, and reduces latest-slot overwrites
@@ -142,9 +147,10 @@ becomes increasingly expensive as object count grows, and concurrent encoder
 and tracking kernels contend for the same GPU. Commit `f19ab9e` routes this
 automatically: overlap is active for one tracked object and the synchronous
 path is restored for two or more. A route transition discards only the pending
-encoded frame; object memories and IDs remain intact. The unified launch
-enables this router by default. Set `pipeline_overlap:=false` for a strictly
-latency-first single-object session.
+encoded frame; object memories and IDs remain intact. Later moving-camera
+validation found that the one-frame delay was visible as mask lag, so the
+unified launch now defaults to `pipeline_overlap:=false`. Enable the router
+only for throughput-first runs.
 
 Commit `fab0c9e` also exposes `track_concurrency`. A four-object sweep used the
 synchronous path with otherwise identical settings:
@@ -214,6 +220,76 @@ tracking from 17.87 to 19.13 FPS (+7.0%), reduced tracker latency from 55.73
 to 52.07 ms (-6.6%), and reduced display interval standard deviation from
 5.99 to 1.60 ms. This changes only presentation cadence and frame scheduling;
 model weights, FP16 precision, masks, and object state are unchanged.
+
+## 2026-07-29 current mode 1/mode 2 sweep
+
+These live-camera runs use the refreshed TV5M bundle, SAM3 commit `da4fcb7`,
+SAM2 commit `a77543a`, 848x480@60 capture, 120 W mode, synchronous masks,
+software HighGUI, bucket 1, and four track contexts. Raw traces are ignored on
+Thor under `results/benchmarks/20260729_mode_analysis/`.
+
+Mode 1 used three repetitions of 10 warm-up plus 50 measured status rows:
+
+| Prompt | Objects/backend | Vendor FPS | Model time | Adapter poll |
+|---|---|---:|---:|---:|
+| `bag` | 1 / per-object | 9.135 | 111.65 ms | 2.51 ms |
+| `chair` | 4 / multiplex | 9.275 | 118.87 ms | 2.62 ms |
+| `bag`, raw MJPEG paused | 1 / per-object | 9.166 | 111.39 ms | 2.46 ms |
+
+The small one-versus-four FPS inversion is within run variance and vendor EMA
+behavior. Multiplex keeps multi-object throughput nearly flat, while model
+time still increases by 6.5%. Pausing the unused native raw decoder saved
+about 0.05 ms in the Python adapter but did not move vendor or displayed FPS,
+so `native_raw_stream` remains an experiment rather than the default.
+
+Mode 2's four-object bucket/concurrency sweep used 30 warm-up plus 100
+measured outputs:
+
+| Route | Inference | Tracking FPS | Source age |
+|---|---:|---:|---:|
+| bucket 1, concurrency 4 | 88.97 ms | 11.208 | 103.68 ms |
+| bucket 2 | 185.69 ms | 5.380 | 199.49 ms |
+| bucket 4 | 170.62 ms | 5.852 | 184.95 ms |
+| bucket 1, concurrency 3, fixed boxes | 92.72 ms | 10.761 | 107.69 ms |
+| bucket 1, concurrency 4, fixed boxes | 88.88 ms | 11.208 | 103.14 ms |
+
+The track tail is the multi-object bottleneck. At four objects it consumed
+81.65 ms of the 88.97 ms inference time, while the encoder used 7.22 ms.
+Capacity-2/4 engines are therefore rejected on Thor; four parallel batch-1
+contexts remain fastest.
+
+A preview/render decomposition found 11.83 FPS with no preview subscriber,
+11.81 FPS with a preview subscriber but no GUI, and 11.21 FPS with the
+displayed viewer. Preview composition already runs on a replace-latest worker
+and is not the bottleneck. Desktop display accounts for roughly 5–6% at four
+objects.
+
+The single-object overlap A/B used the same center point, three repetitions,
+50 warm-up outputs, and 200 measured outputs:
+
+| Route | Inference | Tracking FPS | Source age |
+|---|---:|---:|---:|
+| synchronous | 34.16 ms | 29.053 | 48.09 ms |
+| cross-frame overlap | 29.87 ms | 32.980 | 73.07 ms |
+
+Overlap gains 13.5% throughput but adds 52.0% source age and one processed
+frame of delay. It remains opt-in because the interactive camera should
+prioritize mask freshness.
+
+Finally, software HighGUI window scaling was profiled without changing the
+848x480 render canvas:
+
+| Initial window | Mode 1 render FPS | Mode 2 tracking FPS | Mode 2 inference |
+|---|---:|---:|---:|
+| 1280x720 | 8.51 | 31.420 | 31.43 ms |
+| 1600x900 | 7.56 | 30.460 | 32.49 ms |
+| 1920x1080 | 7.01 | not repeated | not repeated |
+| 2560x1440 | 6.49 | 29.053 | 34.16 ms |
+
+1280x720 is the fastest preset. Commit `0fe4c4f` selects 1600x900 as the
+balanced default: compared with 2560x1440 it improves mode-1 visible cadence
+by 16.6% and mode-2 tracking by 4.8%, while preserving a larger interaction
+window. `[` and `]` still change presets immediately.
 
 ## Runtime selector smoke
 

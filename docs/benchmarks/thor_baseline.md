@@ -145,6 +145,7 @@ paths here after the runs.
 - `results/benchmarks/20260728_gi_sam2_camera_2obj_direct_relay`
 - `results/benchmarks/20260728_gi_sam2_camera_2obj_overlay_paused`
 - `results/benchmarks/20260729_hybrid_1obj_display_resizable_v8`
+- `results/benchmarks/20260729_mode_analysis`
 
 The two-object hybrid baseline used the live D455, prompt `monitor`, confidence
 0.1, TV5M FP16 bundle, 100 warm-up outputs, 1,000 measured outputs, and three

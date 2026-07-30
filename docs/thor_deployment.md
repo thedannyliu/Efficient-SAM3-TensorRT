@@ -237,9 +237,10 @@ Controls:
 - `r`: reset the active mode.
 - `q`: exit.
 
-The viewer initially opens at 2560x1440. Use a preset or drag any window edge
-or corner to choose another size; image, status text, and prompt overlays scale
-together. Mode 2 composites the current raw camera frame and newest SAM2 label
+The viewer initially opens at the performance-balanced 1600x900 preset.
+Use `[` for the faster 1280x720 preset, `]` for a larger preset, or drag any
+window edge or corner; image, status text, and prompt overlays scale together.
+Mode 2 composites the current raw camera frame and newest SAM2 label
 image on an 848x480 interaction canvas, then the GUI performs the final display
 scaling. Mouse callbacks are returned in the shared canvas coordinates and
 converted once to the active camera coordinates, so point/box prompts remain
