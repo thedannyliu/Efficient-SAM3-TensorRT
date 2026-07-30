@@ -5,21 +5,38 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 GI_DELIVERY_DIR="${GI_DELIVERY_DIR:-$HOME/vendor/general-instinct/InstinctSAM-Thor-delivery}"
 IMAGE="${GI_UNIFIED_IMAGE:-instinctsam:thor-r39-unified-api}"
 NAME="${GI_CONTAINER_NAME:-instinctsam-unified}"
-SOURCE="${GI_CAMERA_DEVICE:-/dev/video4}"
 PORT="${GI_PORT:-8767}"
 
 python3 "$REPO_ROOT/scripts/verify_gi_delivery.py" "$GI_DELIVERY_DIR" --skip-tar
-test -c "$SOURCE" || { echo "camera device is not a character device: $SOURCE" >&2; exit 1; }
+if [[ -n "${GI_CAMERA_DEVICE:-}" ]]; then
+  HOST_SOURCE="$GI_CAMERA_DEVICE"
+else
+  shopt -s nullglob
+  camera_links=(/dev/v4l/by-id/*RealSense*video-index0)
+  shopt -u nullglob
+  if ((${#camera_links[@]} > 0)); then
+    HOST_SOURCE="$(readlink -f "${camera_links[0]}")"
+  else
+    HOST_SOURCE="/dev/video4"
+  fi
+fi
+CONTAINER_SOURCE="/dev/video4"
+test -c "$HOST_SOURCE" || {
+  echo "RealSense color device is not available: $HOST_SOURCE" >&2
+  echo "Reconnect the camera or set GI_CAMERA_DEVICE explicitly" >&2
+  exit 1
+}
 docker image inspect "$IMAGE" >/dev/null
 docker rm -f instinctsam-native instinctsam-detect "$NAME" >/dev/null 2>&1 || true
+echo "Using RealSense device $HOST_SOURCE as $CONTAINER_SOURCE in the container"
 docker run -d --name "$NAME" \
   --runtime nvidia \
   --network host \
   --ipc host \
-  --device "$SOURCE:$SOURCE" \
+  --device "$HOST_SOURCE:$CONTAINER_SOURCE" \
   -v instinctsam-trt:/root/.cache/instinctsam/tensorrt \
   -e PORT="$PORT" \
-  -e SOURCE="$SOURCE" \
+  -e SOURCE="$CONTAINER_SOURCE" \
   -e UNIFIED_API=1 \
   -e IN_RES="${GI_IN_RES:-768}" \
   -e DETECT_IN_RES="${GI_DETECT_IN_RES:-1152}" \

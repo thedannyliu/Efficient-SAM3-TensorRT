@@ -9,18 +9,40 @@ if [[ "${GI_RESEARCH_USE_ACK:-}" != "$EXPECTED_ACK" ]]; then
   exit 1
 fi
 
-DESKTOP_PID="$(pgrep -u "$(id -u)" -x gnome-shell | head -1)"
-if [[ -z "$DESKTOP_PID" || ! -r "/proc/$DESKTOP_PID/environ" ]]; then
-  echo "No readable GNOME desktop session found for $USER" >&2
-  exit 1
-fi
-
-DESKTOP_ENV="/proc/$DESKTOP_PID/environ"
-DISPLAY_VALUE="$(tr '\0' '\n' < "$DESKTOP_ENV" | sed -n 's/^DISPLAY=//p' | head -1)"
-XAUTHORITY_VALUE="$(tr '\0' '\n' < "$DESKTOP_ENV" | sed -n 's/^XAUTHORITY=//p' | head -1)"
-RUNTIME_VALUE="$(tr '\0' '\n' < "$DESKTOP_ENV" | sed -n 's/^XDG_RUNTIME_DIR=//p' | head -1)"
+DISPLAY_VALUE=""
+XAUTHORITY_VALUE=""
+RUNTIME_VALUE=""
+WAIT_SECONDS="${THOR_DESKTOP_WAIT_SECONDS:-60}"
+for ((attempt = 0; attempt < WAIT_SECONDS; attempt++)); do
+  DESKTOP_PID="$(
+    pgrep -u "$(id -u)" -x gnome-shell 2>/dev/null | head -1 || true
+  )"
+  if [[ -n "$DESKTOP_PID" && -r "/proc/$DESKTOP_PID/environ" ]]; then
+    DESKTOP_ENV="/proc/$DESKTOP_PID/environ"
+    DISPLAY_VALUE="$(
+      tr '\0' '\n' < "$DESKTOP_ENV" |
+        sed -n 's/^DISPLAY=//p' |
+        head -1
+    )"
+    XAUTHORITY_VALUE="$(
+      tr '\0' '\n' < "$DESKTOP_ENV" |
+        sed -n 's/^XAUTHORITY=//p' |
+        head -1
+    )"
+    RUNTIME_VALUE="$(
+      tr '\0' '\n' < "$DESKTOP_ENV" |
+        sed -n 's/^XDG_RUNTIME_DIR=//p' |
+        head -1
+    )"
+    if [[ -n "$DISPLAY_VALUE" && -n "$XAUTHORITY_VALUE" ]]; then
+      break
+    fi
+  fi
+  sleep 1
+done
 if [[ -z "$DISPLAY_VALUE" || -z "$XAUTHORITY_VALUE" ]]; then
-  echo "GNOME session does not expose DISPLAY and XAUTHORITY" >&2
+  echo "No usable GNOME session appeared within $WAIT_SECONDS seconds" >&2
+  echo "Log into the Thor desktop once, then run the command again" >&2
   exit 1
 fi
 
