@@ -23,6 +23,7 @@ recall on the fixed workload is unchanged.
 | `current-bucket4` | `da4fcb7` / SAM2 `a77543a` | GI → TV5M SAM2, 4 objects | Replace four parallel batch-1 contexts with one capacity-4 track bucket | 88.97 ms; 11.208 FPS | 170.62 ms; 5.852 FPS | -91.8% | -47.8% | 103.68 → 184.95 ms | same FP16 engines and object states | reject |
 | `current-concurrency3` | `da4fcb7` / SAM2 `a77543a` | GI → TV5M SAM2, 4 fixed boxes | Process three object contexts concurrently instead of four | 88.88 ms; 11.208 FPS | 92.72 ms; 10.761 FPS | -4.3% | -4.0% | 103.14 → 107.69 ms | same FP16 engines and fixed prompts | reject; retain 4 |
 | `balanced-window-1600` | `0fe4c4f` | unified displayed UI | Open at 1600x900 instead of 2560x1440 | mode 2: 34.16 ms, 29.053 FPS; mode 1 render 6.49 FPS | mode 2: 32.49 ms, 30.460 FPS; mode 1 render 7.56 FPS | 4.9% mode-2 inference | 4.8% tracking; 16.6% mode-1 render | 48.09 → 46.49 ms | display size only; masks unchanged | accept as balanced default |
+| `camera-menu-ack` | `9fb17f2` | unified camera menu | Require the research-use acknowledgment in the unified launch process so later camera restarts inherit it | camera service failed in 146 ms with verifier traceback | 640x360@60 and 848x480@60 consecutive restarts succeeded in 88.90/93.74 s | n/a | n/a | UI waits during model reload | same public GI entrypoint and profiles | accept |
 
 The final two-object candidate is 2.413x the original ROS relay throughput
 (+141.3%), reduces source-age p95 by 71.9%, and reduces latest-slot overwrites

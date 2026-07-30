@@ -170,6 +170,11 @@ This starts the GI container in the background while ROS loads the default
 TV5M SAM2 engine. If the GI service is already healthy, it is reused instead
 of being restarted. GI and the selected SAM2 model remain resident, so mode 2
 only performs first-frame detection and state transfer during normal tracking.
+Keep `GI_RESEARCH_USE_ACK` exported in the shell that starts the unified UI.
+The mode manager inherits it and needs it later when `c` requests a licensed
+container restart. Commit `9fb17f2` makes the launch fail immediately with a
+clear message when it is missing, instead of opening a UI whose camera menu
+will fail later.
 
 Stop the complete ROS launch before rebuilding or starting another copy:
 
@@ -270,6 +275,13 @@ The menu therefore reports requested and observed camera FPS separately.
 profile. Use 1280x720@30 when spatial detail matters more than motion cadence.
 The D455 does not expose 60 FPS at 1280x720, so that unsupported combination
 is not offered.
+
+The camera menu was revalidated after the acknowledgment fix on 2026-07-30:
+848x480@60 switched to 640x360@60 in 88.90 s, returned a 640x360 JPEG, and
+reported 60.54 observed FPS. A subsequent menu request restored 848x480@60 in
+93.74 s; the container arguments, returned 848x480 JPEG, mode-2 result stream,
+and 59.67 FPS vendor status were all verified. During either reload the UI
+remains open and may appear frozen or blank until the GI API is ready.
 
 Mode 2 defaults to the synchronized SAM2 preview: each displayed source frame
 is paired with the mask computed from that exact frame. This removes the
