@@ -158,23 +158,50 @@ cd ~/Efficient-SAM3-TensorRT
 bash scripts/thor_launch_unified_ui.sh
 ```
 
-For a cold start, launch both model loaders concurrently:
+For normal use, including after a Thor reboot, use the idempotent desktop
+restart command:
 
 ```bash
 cd ~/Efficient-SAM3-TensorRT
-export GI_RESEARCH_USE_ACK=research-evaluation-only
-bash scripts/thor_start_unified_desktop.sh
+GI_RESEARCH_USE_ACK=research-evaluation-only \
+  bash scripts/thor_restart_unified_desktop.sh \
+  default_mode:=2 display_max_width:=1600 \
+  track_bucket_size:=1 track_concurrency:=4 pipeline_overlap:=false
 ```
 
-This starts the GI container in the background while ROS loads the default
-TV5M SAM2 engine. If the GI service is already healthy, it is reused instead
-of being restarted. GI and the selected SAM2 model remain resident, so mode 2
-only performs first-frame detection and state transfer during normal tracking.
-Keep `GI_RESEARCH_USE_ACK` exported in the shell that starts the unified UI.
-The mode manager inherits it and needs it later when `c` requests a licensed
-container restart. Commit `9fb17f2` makes the launch fail immediately with a
-clear message when it is missing, instead of opening a UI whose camera menu
-will fail later.
+The command stops any previous unified ROS launch, clears its shared-frame
+file, and starts the new launch under `nohup`. It returns only after the
+viewer, SAM2 TensorRT node, and GI HTTP runtime are all ready. A healthy GI
+container is reused; if it is missing or unhealthy, the launcher recreates it
+while ROS loads the default TV5M SAM2 engine. The recreate path discovers the
+RealSense color node through `/dev/v4l/by-id` and maps it to the vendor
+container's fixed `/dev/video4`. The default cold-start camera request is
+848x480@60.
+
+After a reboot, the camera must be connected, Docker must be active, and
+`ril-thor` must be logged into the GNOME desktop. The launcher waits up to 60
+seconds for that desktop and reads its real `DISPLAY`, `XAUTHORITY`, and
+`XDG_RUNTIME_DIR`; do not export `DISPLAY=:0`. It also checks Docker access,
+the unified image, and the research-use acknowledgment before starting. The
+full log is `/tmp/efficient-sam3-unified.log`.
+
+GI and the selected SAM2 model remain resident, so mode 2 only performs
+first-frame detection and state transfer during normal tracking. The inline
+`GI_RESEARCH_USE_ACK` is inherited by the mode manager and remains available
+when `c` requests a licensed container restart. Commit `9fb17f2` makes the
+launch fail immediately with a clear message when it is missing, instead of
+opening a UI whose camera menu will fail later.
+
+Pull code separately; the restart command intentionally does not modify the
+working tree:
+
+```bash
+cd ~/Efficient-SAM3-TensorRT
+git pull --ff-only
+```
+
+Run `bash scripts/setup_thor_ros.sh` after pulled ROS source changes. Script or
+documentation-only updates do not need a ROS rebuild.
 
 Stop the complete ROS launch before rebuilding or starting another copy:
 
@@ -186,9 +213,9 @@ bash scripts/thor_stop_unified_desktop.sh
 The start script refuses to create a second unified launch. This avoids two
 adapters and two SAM2 nodes decoding and processing the same camera stream.
 
-The launcher reads `DISPLAY`, `XAUTHORITY`, and `XDG_RUNTIME_DIR` from the
-logged-in GNOME session. Do not assume `DISPLAY=:0`; it was `:1` during the
-2026-07-28 Thor validation.
+The lower-level `thor_start_unified_desktop.sh` remains available for a
+foreground launch. Prefer `thor_restart_unified_desktop.sh` for the demo
+because it is safe to run again when stale ROS processes exist.
 
 The unified launch defaults to mode 2 so an idle UI does not continuously run
 the full InstinctSAM backbone. Press `1` when native SAM3 tracking is needed;
@@ -312,14 +339,27 @@ compose/paint timing. It also reports unique raw camera cadence when the smooth
 shared-camera view is enabled. The second reports model latency, tracking FPS,
 source age, object IDs, and whether overlap is currently active.
 
-Both modes draw the same normalized metrics at the bottom:
-`model ms`, `tracking FPS`, `capacity FPS`, backend, `render FPS`, and
-`raw FPS`. Mode 2 also reports source age. Mode 1's delivered vendor overlay
-retains its own top-left FPS watermark. For mode 1, model time is
-`backbone_ms + tracker_ms`; for mode 2 it is `tracker_total_ms`.
-`capacity FPS` is `1000 / model_ms`, while `tracking FPS` is the measured
-pipeline output cadence. Render FPS is only the desktop refresh cadence and
-must not be reported as model throughput.
+Both modes now show exactly the same two persistent pale-yellow values in the
+top-left corner:
+
+- `Screen FPS`: actual OpenCV viewer paint cadence, including composition and
+  desktop display.
+- `Model-only FPS`: `1000 / model_ms`, excluding camera acquisition,
+  orchestration, and rendering.
+
+For mode 1, `model_ms = backbone_ms + tracker_ms`; for mode 2,
+`model_ms = tracker_total_ms`. A black panel covers the vendor image's embedded
+FPS watermark so it is not mistaken for a third metric. Mode/model/camera
+status appears only temporarily while a menu or switch is active. Detailed
+tracking cadence, source age, backend, and latency remain available through
+the ROS metric topics above.
+
+The restart path was validated in both states on 2026-07-30. A warm restart
+kept the existing 848x480@60 GI container and reopened mode 2/TV5M. A forced
+cold test stopped the container first; the same command rediscovered
+`/dev/video4`, recreated the 848x480@60 container using the retained TensorRT
+cache, and waited until GI, SAM2, and the viewer were ready. The post-start
+desktop screenshot showed only `Screen FPS` and `Model-only FPS`.
 
 Validated on the D455 and the real TV5M FP16 bundle on 2026-07-28:
 
