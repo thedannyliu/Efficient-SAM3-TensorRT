@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import unittest
 
+import numpy as np
+
 from sam31_trt.gi_client import DetectObject, DetectResponse
 from sam31_trt.handoff import select_handoff_objects
 
@@ -43,6 +45,9 @@ class HandoffSelectionTest(unittest.TestCase):
         selected = select_handoff_objects(response, max_objects=2, min_area=25)
         self.assertEqual([item.label for item in selected], ["best", "low"])
         self.assertEqual(selected[0].box, (8.0, 8.0, 15.0, 15.0))
+        self.assertEqual(selected[0].mask.dtype, np.uint8)
+        self.assertEqual(selected[0].mask.shape, (20, 20))
+        self.assertEqual(int(selected[0].mask.sum()), 64)
 
     def test_requires_matching_dimensions(self) -> None:
         response = DetectResponse(

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import numpy as np
+
 from .gi_client import DetectResponse
 from .rle import decode_coco_rle, mask_to_box
 
@@ -11,6 +13,7 @@ class HandoffObject:
     label: str
     score: float
     box: tuple[float, float, float, float]
+    mask: np.ndarray
 
 
 def select_handoff_objects(
@@ -41,7 +44,9 @@ def select_handoff_objects(
         if key in seen:
             continue
         seen.add(key)
-        selected.append(HandoffObject(detected.label, detected.score, clamped))
+        selected.append(
+            HandoffObject(detected.label, detected.score, clamped, mask)
+        )
         if len(selected) >= max_objects:
             break
     return tuple(selected)

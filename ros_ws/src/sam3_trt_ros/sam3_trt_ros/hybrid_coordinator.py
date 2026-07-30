@@ -20,7 +20,7 @@ from sensor_msgs.msg import Image
 from std_msgs.msg import String, UInt8
 from std_srvs.srv import SetBool, Trigger
 
-from sam2_trt_msgs.srv import AddObject
+from sam2_trt_msgs.srv import AddMask, AddObject
 from sam31_trt.gi_client import InstinctSAMClient
 from sam31_trt.handoff import select_handoff_objects
 from sam3_trt_msgs.srv import AddBox, AddPoint, SetPipelineMode, SetTextPrompt
@@ -34,6 +34,7 @@ class HybridCoordinator(Node):
         self.declare_parameter("gi_timeout", 15.0)
         self.declare_parameter("max_objects", 8)
         self.declare_parameter("min_mask_area", 25)
+        self.declare_parameter("text_handoff_prompt", "box")
         self.declare_parameter("sam2_service_timeout", 10.0)
         self.declare_parameter("initialization_timeout", 30.0)
         self.declare_parameter("geometry_relay_drain_ms", 120.0)
@@ -78,6 +79,9 @@ class HybridCoordinator(Node):
         )
         self.add_client = self.create_client(
             AddObject, "/sam/add_object", callback_group=callback_group
+        )
+        self.add_mask_client = self.create_client(
+            AddMask, "/sam/add_mask", callback_group=callback_group
         )
         self.reset_client = self.create_client(
             Trigger, "/sam/reset", callback_group=callback_group
@@ -330,21 +334,39 @@ class HybridCoordinator(Node):
 
             self.reset_sam2()
             reset_started = True
-            for selected in objects:
-                add_request = AddObject.Request()
-                add_request.kind = AddObject.Request.BOX
-                (
-                    add_request.x0,
-                    add_request.y0,
-                    add_request.x1,
-                    add_request.y1,
-                ) = selected.box
-                add_response = self.call(
-                    self.add_client, add_request, "/sam/add_object"
+            prompt_mode = str(
+                self.get_parameter("text_handoff_prompt").value
+            )
+            if prompt_mode not in {"box", "mask"}:
+                raise ValueError(
+                    "text_handoff_prompt must be 'box' or 'mask'"
                 )
+            for selected in objects:
+                if prompt_mode == "mask":
+                    add_request = AddMask.Request()
+                    add_request.mask = self.bridge.cv2_to_imgmsg(
+                        selected.mask * 255, encoding="mono8"
+                    )
+                    add_request.mask.header = frozen.header
+                    add_response = self.call(
+                        self.add_mask_client, add_request, "/sam/add_mask"
+                    )
+                else:
+                    add_request = AddObject.Request()
+                    add_request.kind = AddObject.Request.BOX
+                    (
+                        add_request.x0,
+                        add_request.y0,
+                        add_request.x1,
+                        add_request.y1,
+                    ) = selected.box
+                    add_response = self.call(
+                        self.add_client, add_request, "/sam/add_object"
+                    )
                 if not add_response.success:
                     raise RuntimeError(
-                        f"/sam/add_object failed: {add_response.message}"
+                        f"SAM2 {prompt_mode} prompt failed: "
+                        f"{add_response.message}"
                     )
 
             self.expected_stamp = frozen_stamp
@@ -364,10 +386,14 @@ class HybridCoordinator(Node):
             self.resume()
             total_ms = (perf_counter() - start) * 1000.0
             metric = {
-                "schema_version": 1,
+                "schema_version": 2,
                 "stamp_ns": frozen_stamp,
                 "text": text,
                 "object_count": len(objects),
+                "handoff_prompt": prompt_mode,
+                "mask_payload_bytes": sum(
+                    item.mask.nbytes for item in objects
+                ),
                 "gi_snapshot_ms": snapshot_ms,
                 "jpeg_encode_ms": 0.0,
                 "gi_detect_wall_ms": detect_wall_ms,
@@ -380,6 +406,7 @@ class HybridCoordinator(Node):
                         "label": item.label,
                         "score": item.score,
                         "box": list(item.box),
+                        "mask_area": int(item.mask.sum()),
                     }
                     for item in objects
                 ],

@@ -30,6 +30,7 @@ def generate_launch_description() -> LaunchDescription:
         "track_bucket_min_objects"
     )
     track_bucket_size = LaunchConfiguration("track_bucket_size")
+    text_handoff_prompt = LaunchConfiguration("text_handoff_prompt")
     viewer = LaunchConfiguration("viewer")
     return LaunchDescription(
         [
@@ -68,6 +69,9 @@ def generate_launch_description() -> LaunchDescription:
                 "track_bucket_min_objects", default_value="4"
             ),
             DeclareLaunchArgument("track_bucket_size", default_value="1"),
+            DeclareLaunchArgument(
+                "text_handoff_prompt", default_value="box"
+            ),
             DeclareLaunchArgument("viewer", default_value="true"),
             Node(
                 package="sam3_trt_ros",
@@ -114,6 +118,7 @@ def generate_launch_description() -> LaunchDescription:
                     {
                         "relay_topic": "/hybrid/camera/image_raw",
                         "gi_base_url": base_url,
+                        "text_handoff_prompt": text_handoff_prompt,
                     }
                 ],
             ),
