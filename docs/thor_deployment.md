@@ -206,6 +206,21 @@ for one object and changes to synchronous tracking at two or more without
 clearing object memories or IDs. Use `pipeline_overlap:=false` when the lowest
 single-object mask age matters more than throughput.
 
+TensorRT object batching is a separate experimental switch:
+
+```bash
+bash scripts/thor_start_unified_desktop.sh \
+  track_bucket_size:=2 track_bucket_min_objects:=4
+```
+
+Supported bucket sizes are 1, 2, and 4. Size 1 is the default and uses the
+faster parallel per-object contexts. Thor testing found that bucket 2/4
+increased four-object latency from 86.49 ms to 189.90/198.33 ms, so neither is
+enabled for the demo. The options remain available for newly rebuilt engines
+and future TensorRT versions. `/sam/result_json` reports
+`track_bucket_active`, `track_bucket_size`, and
+`track_bucket_min_objects`.
+
 Controls:
 
 - `1`: native General Instinct SAM3/SAM3.1 tracking.
