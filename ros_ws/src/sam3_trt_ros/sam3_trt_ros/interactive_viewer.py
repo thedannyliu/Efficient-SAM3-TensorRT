@@ -96,12 +96,18 @@ class InteractiveViewer(Node):
             (
                 "TV11M",
                 "sam2.1-tinyvit-11m",
-                f"{bundle_root}/sam2.1-tinyvit-11m/fp16_aux0",
+                (
+                    f"{bundle_root}/sam2.1-tinyvit-11m/"
+                    "fp16_best_20260729"
+                ),
             ),
             (
                 "TV21M",
                 "sam2.1-tinyvit-21m",
-                f"{bundle_root}/sam2.1-tinyvit-21m/fp16_aux0",
+                (
+                    f"{bundle_root}/sam2.1-tinyvit-21m/"
+                    "fp16_best_20260729"
+                ),
             ),
         ]
         self.active_model = "TV5M"
