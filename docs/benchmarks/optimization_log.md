@@ -291,6 +291,29 @@ balanced default: compared with 2560x1440 it improves mode-1 visible cadence
 by 16.6% and mode-2 tracking by 4.8%, while preserving a larger interaction
 window. `[` and `]` still change presets immediately.
 
+### Remaining opportunities, in priority order
+
+1. Mode 2's four-object track tail is 81.65 ms, or 91.8% of model inference.
+   Further multi-object work should target the track engine and device-resident
+   memory-state packing. The current dynamic bucket engines should not be
+   enabled. A separately built static batch-2/4 engine is still worth testing
+   because it would let TensorRT select tactics for one exact batch shape.
+2. Mode 1 spends about 112–119 ms in the licensed model and only about 2.5 ms
+   in the ROS adapter. Additional JPEG/ROS tuning has a small ceiling. A
+   substantial gain requires a rebuilt vendor tracker or the planned native
+   TensorRT SAM3 pipeline; the licensed delivery does not expose that boundary.
+3. A motion-aware multi-object scheduler could update fast-moving/selected
+   objects every frame and stagger stable objects. This can raise delivered
+   frame cadence, but it changes temporal mask behavior and must pass the 95%
+   quality/recall gate before deployment.
+4. 1280x720 remains available as the maximum-FPS display preset. Direct vendor
+   overlay sharing could remove one mode-1 ROS image conversion, but the
+   measured ceiling is only the gap between 8.51 render FPS and roughly 9
+   vendor FPS.
+5. Single-object overlap is already implemented and measured. It is the
+   highest-throughput route but is intentionally not automatic because its
+   one-frame delay conflicts with interactive mask freshness.
+
 ## Runtime selector smoke
 
 Commit `706e524` adds UI menus for TV5M/11M/21M and camera profiles. Model
