@@ -47,7 +47,7 @@ def generate_launch_description() -> LaunchDescription:
                 "base_url", default_value="http://127.0.0.1:8767"
             ),
             DeclareLaunchArgument("display_fps", default_value="60.0"),
-            DeclareLaunchArgument("display_max_width", default_value="2560"),
+            DeclareLaunchArgument("display_max_width", default_value="1600"),
             DeclareLaunchArgument("default_mode", default_value="2"),
             DeclareLaunchArgument(
                 "gstreamer_mjpeg_decode", default_value="false"
