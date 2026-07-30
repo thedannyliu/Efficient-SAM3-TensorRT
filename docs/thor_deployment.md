@@ -339,27 +339,30 @@ compose/paint timing. It also reports unique raw camera cadence when the smooth
 shared-camera view is enabled. The second reports model latency, tracking FPS,
 source age, object IDs, and whether overlap is currently active.
 
-Both modes now show exactly the same two persistent pale-yellow values in the
-top-left corner:
+Both modes use the same transparent pale-yellow HUD in the top-left corner:
 
-- `Screen FPS`: actual OpenCV viewer paint cadence, including composition and
-  desktop display.
-- `Model-only FPS`: `1000 / model_ms`, excluding camera acquisition,
-  orchestration, and rendering.
+- current mode and route;
+- requested camera resolution and FPS;
+- current model (`GI SAM3` in mode 1 or the selected TinyViT in mode 2);
+- `Screen FPS`, the actual OpenCV viewer paint cadence including composition
+  and desktop display;
+- `Model latency`, the model-only time in milliseconds, excluding camera
+  acquisition, orchestration, and rendering.
 
 For mode 1, `model_ms = backbone_ms + tracker_ms`; for mode 2,
-`model_ms = tracker_total_ms`. A black panel covers the vendor image's embedded
-FPS watermark so it is not mistaken for a third metric. Mode/model/camera
-status appears only temporarily while a menu or switch is active. Detailed
-tracking cadence, source age, backend, and latency remain available through
-the ROS metric topics above.
+`model_ms = tracker_total_ms`. Mode 1 replaces only the vendor watermark region
+with the corresponding raw-camera pixels before drawing the transparent HUD,
+so its embedded FPS is not mistaken for a second screen metric. The text uses
+a narrow dark outline for contrast but no background panel. Menu/switch status
+appears only temporarily. Detailed tracking cadence, source age, backend, and
+latency remain available through the ROS metric topics above.
 
 The restart path was validated in both states on 2026-07-30. A warm restart
 kept the existing 848x480@60 GI container and reopened mode 2/TV5M. A forced
 cold test stopped the container first; the same command rediscovered
 `/dev/video4`, recreated the 848x480@60 container using the retained TensorRT
 cache, and waited until GI, SAM2, and the viewer were ready. The post-start
-desktop screenshot showed only `Screen FPS` and `Model-only FPS`.
+desktop screenshot showed the common transparent runtime HUD.
 
 Validated on the D455 and the real TV5M FP16 bundle on 2026-07-28:
 
