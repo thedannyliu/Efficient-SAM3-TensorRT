@@ -277,13 +277,14 @@ small label image, and the viewer composites the newest available pair. With
 848x480@60 capture, the measured idle render was 59.23 FPS with 0.78 ms
 interval standard deviation.
 
-When masks are active, desktop painting and TensorRT contend for the GPU.
-`adaptive_display_fps:=true` keeps the cadence sustainable: 28 FPS for one
-object, 18 FPS for two, 9 FPS for four, and a 5 FPS floor. This made the
-two-object stream exactly 18.00 FPS with 1.60 ms interval standard deviation
-and improved model throughput by 7.0% relative to attempting a 30 FPS display.
-Disable it with `adaptive_display_fps:=false` only for display-capacity
-experiments.
+When masks are active, desktop painting and TensorRT contend for compute.
+The original `adaptive_display_fps:=true` rule selected 28 FPS for one object
+and `36 / object_count` thereafter. A 2026-07-29 moving-camera check rejected
+that rule for the interactive default: at three objects it limited display to
+12 FPS even though tracking was 14.17 FPS and could add about 83 ms before a
+completed mask was painted. The default is now
+`adaptive_display_fps:=false`. Re-enable it only for throughput experiments
+where model capacity matters more than mask presentation delay.
 
 Inspect the actual GUI cadence and model path separately:
 
@@ -296,9 +297,14 @@ The first reports configured/active display FPS, interval jitter, unique raw
 camera cadence, and compose/paint timing. The second reports model latency,
 tracking FPS, source age, object IDs, and whether overlap is currently active.
 
-Mode 1 keeps the vendor FPS watermark at the top-left and places only our mode
-and action status at the bottom. Mode 2 draws our model latency/FPS/backend
-line because its SAM2 preview has no vendor metric watermark.
+Both modes draw the same normalized metrics at the bottom:
+`model ms`, `tracking FPS`, `capacity FPS`, backend, `render FPS`, and
+`raw FPS`. Mode 2 also reports source age. Mode 1's delivered vendor overlay
+retains its own top-left FPS watermark. For mode 1, model time is
+`backbone_ms + tracker_ms`; for mode 2 it is `tracker_total_ms`.
+`capacity FPS` is `1000 / model_ms`, while `tracking FPS` is the measured
+pipeline output cadence. Render FPS is only the desktop refresh cadence and
+must not be reported as model throughput.
 
 Validated on the D455 and the real TV5M FP16 bundle on 2026-07-28:
 
@@ -315,8 +321,8 @@ the formal two-object headless median improved from 5.746 to 13.865 FPS
 62.87/92.75 ms. See `docs/benchmarks/thor_baseline.md` for the protocol and raw
 result paths.
 
-The TV5M bundle printed TensorRT's cross-device engine warning, so rebuild its
-engines on Thor before treating this as the final achievable Thor speed.
+The current TV5M default is the on-device
+`fp16_best_20260729` bundle built from `tv5-best.pt`.
 
 In mode 2, the coordinator converts masks to at most eight boxes and initializes
 SAM2 using the exact source timestamp. SAM2 stays loaded but receives no frames
@@ -338,6 +344,13 @@ queue, and retries the same frozen timestamp until SAM2 confirms the new object.
 This prevents a successful track from leaving the UI service waiting on a
 dropped initialization frame.
 
+Text initialization now uses the same retry rule. Before the fix, a single
+dropped frozen frame made the service wait 30 seconds and return
+`SAM2 did not initialize on the frozen frame`, which appeared to be a UI crash.
+After commit `7eb9435`, two consecutive `bag` text handoffs completed without
+restarting the viewer or either model. The UI also rejects a new text request
+while the previous handoff is pending.
+
 Additional live-camera validation on 2026-07-29:
 
 - mode 1 accepted text, native positive-point, and native box prompts;
@@ -347,6 +360,15 @@ Additional live-camera validation on 2026-07-29:
 - the resizable displayed single-object run reached a three-run median of
   13.923 FPS, inference mean/p95 36.53/39.64 ms, and source-age p50/p95
   47.50/50.56 ms with zero drops.
+
+The General Instinct router was also checked with the requested prompts under
+848x480@60 capture. After prompt stabilization, `bag` produced one object on
+the `per_object` backend at 8.78 FPS with 115.43 ms of
+backbone-plus-tracker time. `chair` produced five objects on `multiplex` at
+8.37 FPS with 134.67 ms of model time. The one-object steady state was
+therefore faster. Brief inversions immediately after reset are caused by the
+vendor's 0.9 EMA retaining re-anchor/backend-switch frames; use capacity FPS
+and stabilized tracking FPS for router comparisons.
 
 See `docs/general_instinct_runtime_review.md` for the delivered TensorRT
 boundary, effective optimizations, quality limits, and the recommended scope of
