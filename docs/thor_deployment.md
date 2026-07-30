@@ -169,11 +169,7 @@ For normal use, including after a Thor reboot, use the idempotent desktop
 restart command:
 
 ```bash
-cd ~/Efficient-SAM3-TensorRT
-GI_RESEARCH_USE_ACK=research-evaluation-only \
-  bash scripts/thor_restart_unified_desktop.sh \
-  default_mode:=2 display_max_width:=1600 \
-  track_bucket_size:=1 track_concurrency:=4 pipeline_overlap:=false
+cd ~/Efficient-SAM3-TensorRT && GI_RESEARCH_USE_ACK=research-evaluation-only bash scripts/thor_restart_unified_desktop.sh
 ```
 
 The command stops any previous unified ROS launch, clears its shared-frame
@@ -182,15 +178,27 @@ viewer, SAM2 TensorRT node, and GI HTTP runtime are all ready. A healthy GI
 container is reused; if it is missing or unhealthy, the launcher recreates it
 while ROS loads the default TV5M SAM2 engine. The recreate path discovers the
 RealSense color node through `/dev/v4l/by-id` and maps it to the vendor
-container's fixed `/dev/video4`. The default cold-start camera request is
-848x480@60.
+container's fixed `/dev/video4`. The defaults are mode 2, TV5M, 1600-pixel
+display preset, track concurrency 4, bucket size 1, overlap disabled, and an
+848x480@60 camera request.
 
 After a reboot, the camera must be connected, Docker must be active, and
-`ril-thor` must be logged into the GNOME desktop. The launcher waits up to 60
+`ril-thor` must be logged into the GNOME desktop. The launcher waits up to 120
 seconds for that desktop and reads its real `DISPLAY`, `XAUTHORITY`, and
 `XDG_RUNTIME_DIR`; do not export `DISPLAY=:0`. It also checks Docker access,
 the unified image, and the research-use acknowledgment before starting. The
 full log is `/tmp/efficient-sam3-unified.log`.
+
+Commit `997fb4b` makes the command suitable for early post-reboot use: it waits
+for Docker for up to 60 seconds, the RealSense color node for up to 120
+seconds, and the GNOME desktop for up to 120 seconds. During a cold GI load it
+prints the container, GI camera, SAM2, and viewer readiness every 10 seconds.
+Success requires a running GI status and a positive camera-frame counter, not
+merely an open HTTP port. A real reboot on 2026-07-30 required about 90 seconds
+for GI to become ready. A subsequent forced-cold test completed after the
+70-second progress update and restored mode 2/TV5M at 848x480@60. Do not
+interrupt the command while it reports `GI=false`; that is model loading, not
+a hang.
 
 GI and the selected SAM2 model remain resident, so mode 2 only performs
 first-frame detection and state transfer during normal tracking. The inline
