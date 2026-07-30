@@ -52,7 +52,7 @@ def generate_launch_description() -> LaunchDescription:
                 "gstreamer_mjpeg_decode", default_value="false"
             ),
             DeclareLaunchArgument("opengl_view", default_value="false"),
-            DeclareLaunchArgument("pipeline_overlap", default_value="true"),
+            DeclareLaunchArgument("pipeline_overlap", default_value="false"),
             DeclareLaunchArgument(
                 "pipeline_overlap_max_objects", default_value="1"
             ),
@@ -60,7 +60,7 @@ def generate_launch_description() -> LaunchDescription:
             DeclareLaunchArgument("render_width", default_value="848"),
             DeclareLaunchArgument("shared_memory_poll_hz", default_value="240.0"),
             DeclareLaunchArgument("shared_view_poll_hz", default_value="120.0"),
-            DeclareLaunchArgument("smooth_camera_view", default_value="true"),
+            DeclareLaunchArgument("smooth_camera_view", default_value="false"),
             DeclareLaunchArgument("track_concurrency", default_value="4"),
             DeclareLaunchArgument(
                 "track_bucket_min_objects", default_value="4"
