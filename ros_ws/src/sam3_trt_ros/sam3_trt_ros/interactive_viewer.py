@@ -746,20 +746,13 @@ class InteractiveViewer(Node):
                 (0, 255, 255),
                 2,
             )
-        camera = (
-            f"{self.active_camera_profile[0]}x{self.active_camera_profile[1]}"
-            f" req{self.active_camera_profile[2]}"
-        )
-        if self.camera_observed_fps > 0.0:
-            camera += f" obs{self.camera_observed_fps:.0f}"
-        model = f" | {self.active_model}" if self.mode == 2 else ""
-        lines = [
-            f"Mode {self.mode}{model} | Cam {camera} | 1=GI  2=GI->SAM2",
-            self.status,
-        ]
+        lines = []
+        if self.model_switching or self.camera_switching or self.text_pending:
+            lines.append(self.status)
         if self.entering_text:
             lines.append(f"> {self.text}_")
         if self.model_menu:
+            lines.append("select SAM2 model")
             lines.extend(
                 f"[{index}] {label}"
                 + (" (active)" if label == self.active_model else "")
@@ -767,6 +760,7 @@ class InteractiveViewer(Node):
             )
             lines.append("Esc=cancel")
         if self.camera_menu:
+            lines.append("select camera profile")
             lines.extend(
                 f"[{index}] {width}x{height}@{fps}"
                 + (
