@@ -8,24 +8,32 @@ NAME="${GI_CONTAINER_NAME:-instinctsam-unified}"
 PORT="${GI_PORT:-8767}"
 
 python3 "$REPO_ROOT/scripts/verify_gi_delivery.py" "$GI_DELIVERY_DIR" --skip-tar
-if [[ -n "${GI_CAMERA_DEVICE:-}" ]]; then
-  HOST_SOURCE="$GI_CAMERA_DEVICE"
-else
-  shopt -s nullglob
-  camera_links=(/dev/v4l/by-id/*RealSense*video-index0)
-  shopt -u nullglob
-  if ((${#camera_links[@]} > 0)); then
-    HOST_SOURCE="$(readlink -f "${camera_links[0]}")"
+CAMERA_WAIT_SECONDS="${GI_CAMERA_WAIT_SECONDS:-120}"
+HOST_SOURCE=""
+for ((second = 0; second < CAMERA_WAIT_SECONDS; second++)); do
+  if [[ -n "${GI_CAMERA_DEVICE:-}" ]]; then
+    test -c "$GI_CAMERA_DEVICE" && HOST_SOURCE="$GI_CAMERA_DEVICE"
   else
-    HOST_SOURCE="/dev/video4"
+    shopt -s nullglob
+    camera_links=(/dev/v4l/by-id/*RealSense*video-index0)
+    shopt -u nullglob
+    if ((${#camera_links[@]} > 0)); then
+      candidate="$(readlink -f "${camera_links[0]}")"
+      test -c "$candidate" && HOST_SOURCE="$candidate"
+    fi
   fi
-fi
+  [[ -n "$HOST_SOURCE" ]] && break
+  if ((second > 0 && second % 10 == 0)); then
+    echo "Waiting for the RealSense color camera (${second}s)"
+  fi
+  sleep 1
+done
 CONTAINER_SOURCE="/dev/video4"
-test -c "$HOST_SOURCE" || {
-  echo "RealSense color device is not available: $HOST_SOURCE" >&2
+if [[ -z "$HOST_SOURCE" ]]; then
+  echo "RealSense color device did not appear within $CAMERA_WAIT_SECONDS seconds" >&2
   echo "Reconnect the camera or set GI_CAMERA_DEVICE explicitly" >&2
   exit 1
-}
+fi
 docker image inspect "$IMAGE" >/dev/null
 docker rm -f instinctsam-native instinctsam-detect "$NAME" >/dev/null 2>&1 || true
 echo "Using RealSense device $HOST_SOURCE as $CONTAINER_SOURCE in the container"
@@ -49,7 +57,8 @@ docker run -d --name "$NAME" \
   --cam-fps "${GI_CAMERA_FPS:-30}" >/dev/null
 
 for _ in $(seq 1 150); do
-  if curl -fsS --max-time 2 "http://127.0.0.1:$PORT/status.json" >/dev/null; then
+  if curl -fsS --max-time 2 \
+    "http://127.0.0.1:$PORT/status.json" >/dev/null 2>&1; then
     PYTHONPATH="$REPO_ROOT/src" python3 "$REPO_ROOT/scripts/warm_gi.py" \
       --base-url "http://127.0.0.1:$PORT" || \
       echo "InstinctSAM warm-up failed; the first prompt will warm it"
