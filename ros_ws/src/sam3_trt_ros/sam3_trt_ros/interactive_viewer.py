@@ -786,27 +786,53 @@ class InteractiveViewer(Node):
                 2,
                 cv2.LINE_AA,
             )
-        model_only_fps = runtime["capacity_fps"]
+        if self.mode == SetPipelineMode.Request.INSTINCTSAM:
+            mode_label = "Mode: 1 (SAM3)"
+            model_label = "Model: GI SAM3"
+            if self.raw_frame is not None:
+                patch_height = min(44, rendered.shape[0])
+                patch_width = min(240, rendered.shape[1])
+                rendered[:patch_height, :patch_width] = self.raw_frame[
+                    :patch_height, :patch_width
+                ]
+        else:
+            mode_label = "Mode: 2 (SAM3 -> SAM2)"
+            model_label = f"Model: {self.active_model}"
+        width, height, fps = self.active_camera_profile
+        model_ms = runtime["model_ms"]
         performance_lines = [
+            mode_label,
+            f"Camera: {width}x{height} @ {fps} FPS",
+            model_label,
             (
-                f"Screen {self.render_fps:.1f} FPS"
+                f"Screen: {self.render_fps:.1f} FPS"
                 if self.render_fps > 0.0
-                else "Screen -- FPS"
+                else "Screen: -- FPS"
             ),
             (
-                f"Model-only {float(model_only_fps):.1f} FPS"
-                if model_only_fps is not None
-                else "Model-only -- FPS"
+                f"Model latency: {float(model_ms):.1f} ms"
+                if model_ms is not None
+                else "Model latency: -- ms"
             ),
         ]
-        cv2.rectangle(rendered, (0, 0), (330, 76), (0, 0, 0), -1)
         for index, line in enumerate(performance_lines):
+            position = (12, 26 + index * 28)
             cv2.putText(
                 rendered,
                 line,
-                (12, 29 + index * 32),
+                position,
                 cv2.FONT_HERSHEY_SIMPLEX,
-                0.75,
+                0.62,
+                (0, 0, 0),
+                4,
+                cv2.LINE_AA,
+            )
+            cv2.putText(
+                rendered,
+                line,
+                position,
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.62,
                 (80, 230, 230),
                 2,
                 cv2.LINE_AA,
