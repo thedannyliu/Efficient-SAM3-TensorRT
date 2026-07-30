@@ -28,6 +28,13 @@ docker info
 The account must list `docker`. The scripts explicitly request the NVIDIA
 runtime, so Docker's default runtime may remain `runc`.
 
+If the current GNOME login predates the `usermod` command, either log out and
+back in or run `newgrp docker` once in that terminal. `newgrp` changes the
+shell's primary group, so commit `2ccc1ca` makes the desktop launcher use the
+inherited `DISPLAY`, `XAUTHORITY`, and `XDG_RUNTIME_DIR` before attempting to
+read the GNOME process environment. This avoids `/proc/<gnome-shell>/environ:
+Permission denied` in the temporary `newgrp` shell.
+
 ## 2. Obtain code and private delivery
 
 ```bash
