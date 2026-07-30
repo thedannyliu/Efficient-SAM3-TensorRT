@@ -38,7 +38,7 @@ for _ in $(seq 1 900); do
   if pgrep -f '/sam3_trt_ros/interactive_viewer' >/dev/null &&
     pgrep -f '/sam2_trt_ros/sam2_trt_node' >/dev/null &&
     curl -fsS --max-time 2 \
-      "http://127.0.0.1:$PORT/status.json" >/dev/null; then
+      "http://127.0.0.1:$PORT/status.json" >/dev/null 2>&1; then
     echo "Unified desktop and both model runtimes are ready (PID $launcher_pid)"
     echo "Log: $LOG"
     exit 0
