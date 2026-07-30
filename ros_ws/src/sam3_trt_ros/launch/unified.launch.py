@@ -39,7 +39,7 @@ def generate_launch_description() -> LaunchDescription:
                 "bundle_dir",
                 default_value=(
                     "/home/ril-thor/Efficient-SAM2-TensorRT/bundles/"
-                    "sam2.1-tinyvit-5m/fp16_aux0"
+                    "sam2.1-tinyvit-5m/fp16_best_20260729"
                 ),
             ),
             DeclareLaunchArgument(

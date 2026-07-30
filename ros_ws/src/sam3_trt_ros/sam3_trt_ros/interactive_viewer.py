@@ -17,6 +17,7 @@ from std_msgs.msg import String, UInt8
 from std_srvs.srv import Trigger
 
 from sam2_trt_msgs.srv import SwitchModel
+from sam31_trt.metrics import runtime_metrics
 from sam31_trt.shared_frame import SharedFrameReader
 from sam3_trt_msgs.srv import (
     AddBox,
@@ -76,6 +77,7 @@ class InteractiveViewer(Node):
         self.camera_menu = False
         self.model_switching = False
         self.camera_switching = False
+        self.text_pending = False
         self.text = ""
         self.status = (
             "t=text, m=model, c=camera, click=point, drag=box, [ ]=window"
@@ -86,7 +88,10 @@ class InteractiveViewer(Node):
             (
                 "TV5M",
                 "sam2.1-tinyvit-5m",
-                f"{bundle_root}/sam2.1-tinyvit-5m/fp16_aux0",
+                (
+                    f"{bundle_root}/sam2.1-tinyvit-5m/"
+                    "fp16_best_20260729"
+                ),
             ),
             (
                 "TV11M",
@@ -241,6 +246,8 @@ class InteractiveViewer(Node):
         frame = self.bridge.imgmsg_to_cv2(message, desired_encoding="bgr8")
         if mode in (0, 1):
             self.source_sizes[mode] = (frame.shape[1], frame.shape[0])
+        if mode == 0:
+            self.raw_frame_times.append(perf_counter())
         if (frame.shape[1], frame.shape[0]) != self.canvas_size:
             frame = cv2.resize(frame, self.canvas_size, interpolation=cv2.INTER_LINEAR)
         self.frame_versions[mode] += 1
@@ -462,6 +469,9 @@ class InteractiveViewer(Node):
         if not text:
             self.status = "empty text cancelled"
             return
+        if self.text_pending:
+            self.status = "a text handoff is already in progress"
+            return
         client = self.text_clients[self.mode]
         if not client.service_is_ready():
             self.status = "text service is not ready"
@@ -469,9 +479,14 @@ class InteractiveViewer(Node):
         request = SetTextPrompt.Request()
         request.text = text
         request.confidence = self.confidence
+        self.text_pending = True
         future = client.call_async(request)
-        future.add_done_callback(self.on_action_response)
+        future.add_done_callback(self.on_text_response)
         self.status = f"detecting: {text}"
+
+    def on_text_response(self, future: object) -> None:
+        self.text_pending = False
+        self.on_action_response(future)
 
     def on_action_response(self, future: object) -> None:
         try:
@@ -634,6 +649,9 @@ class InteractiveViewer(Node):
             self.handle_camera_menu(key)
             return
         if key == ord("t"):
+            if self.text_pending:
+                self.status = "a text handoff is already in progress"
+                return
             self.entering_text = True
             self.text = ""
             self.status = "type a prompt; Enter=send, Esc=cancel"
@@ -755,32 +773,36 @@ class InteractiveViewer(Node):
                 )
             )
             lines.append("Esc=cancel")
-        if self.mode == SetPipelineMode.Request.HYBRID:
-            latency = self.metrics.get(
-                "tracker_total_ms",
-                self.metrics.get("inference_ms", self.metrics.get("latency_ms")),
-            )
-            fps = self.metrics.get(
-                "tracking_fps",
-                self.metrics.get("fps", self.metrics.get("processed_fps")),
-            )
-            backend = self.metrics.get(
-                "tracker_backend", self.metrics.get("backend")
-            )
+        runtime = runtime_metrics(self.metrics)
+        if self.metrics:
             metric_parts = []
-            if latency is not None:
-                metric_parts.append(f"model {float(latency):.1f} ms")
-            if fps is not None:
-                metric_parts.append(f"{float(fps):.1f} FPS")
-            if backend is not None:
-                metric_parts.append(str(backend))
+            if runtime["model_ms"] is not None:
+                metric_parts.append(
+                    f"model {float(runtime['model_ms']):.1f} ms"
+                )
+            if runtime["tracking_fps"] is not None:
+                metric_parts.append(
+                    f"tracking {float(runtime['tracking_fps']):.1f} FPS"
+                )
+            if runtime["capacity_fps"] is not None:
+                metric_parts.append(
+                    f"capacity {float(runtime['capacity_fps']):.1f} FPS"
+                )
+            if runtime["backend"] is not None:
+                metric_parts.append(str(runtime["backend"]))
             if metric_parts:
                 lines.append(" | ".join(metric_parts))
-            if self.render_fps > 0.0:
-                lines.append(
-                    f"render {self.render_fps:.1f} FPS"
-                    f" | raw {self.raw_view_fps:.1f} FPS"
-                )
+        display_parts = []
+        if self.render_fps > 0.0:
+            display_parts.append(f"render {self.render_fps:.1f} FPS")
+        if self.raw_view_fps > 0.0:
+            display_parts.append(f"raw {self.raw_view_fps:.1f} FPS")
+        if runtime["source_age_ms"] is not None:
+            display_parts.append(
+                f"source {float(runtime['source_age_ms']):.1f} ms"
+            )
+        if display_parts:
+            lines.append(" | ".join(display_parts))
         first_line_y = (
             rendered.shape[0] - 12 - (len(lines) - 1) * 28
             if self.mode == SetPipelineMode.Request.INSTINCTSAM

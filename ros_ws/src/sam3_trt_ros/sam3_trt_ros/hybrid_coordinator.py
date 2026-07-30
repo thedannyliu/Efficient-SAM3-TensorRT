@@ -351,8 +351,14 @@ class HybridCoordinator(Node):
             self.expected_objects = len(objects)
             self.initialized.clear()
             init_start = perf_counter()
-            self.relay.publish(frozen)
-            if not self.initialized.wait(timeout):
+            deadline = init_start + timeout
+            while not self.initialized.is_set():
+                self.relay.publish(frozen)
+                remaining = deadline - perf_counter()
+                if remaining <= 0.0:
+                    break
+                self.initialized.wait(min(0.1, remaining))
+            if not self.initialized.is_set():
                 raise TimeoutError("SAM2 did not initialize on the frozen frame")
             init_ms = (perf_counter() - init_start) * 1000.0
             self.resume()
