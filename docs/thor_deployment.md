@@ -328,6 +328,24 @@ The TV5M, TV11M, and TV21M model-menu entries use their on-device
 `tv21-best.pt`. Only the selected SAM2 model is resident. Switching models
 resets tracking state but does not restart the GI container.
 
+The three menu entries were smoke-tested in the live 848x480@60 camera
+pipeline on 2026-07-29. Each test used mode 2 and the text prompt `chair`,
+which produced five SAM2 tracks:
+
+| Model | TensorRT load | Encoder GPU | Five-object inference | Tracking FPS |
+|---|---:|---:|---:|---:|
+| TV5M | 2823.7 ms | 7.44 ms | 113.73 ms | 8.65 |
+| TV11M | 2428.7 ms | 7.62 ms | 111.99 ms | 8.86 |
+| TV21M | 2365.6 ms | 13.63 ms | 117.61 ms | 8.44 |
+
+These are single live samples, not a controlled statistical benchmark. They
+verify model switching, GI text-to-box handoff, and multi-object tracking.
+The near-equal five-object results show that the shared SAM2 tracking tail
+dominates at this object count. TV21M's larger encoder is more visible with no
+active objects: the same smoke measured 14.52 ms total inference versus
+7.75 ms for TV11M. `/sam/result_json` is the authoritative runtime source for
+`model_id`; the launch parameter still describes the initial bundle.
+
 In mode 2, the coordinator converts masks to at most eight boxes and initializes
 SAM2 using the exact source timestamp. SAM2 stays loaded but receives no frames
 in mode 1.
