@@ -323,8 +323,10 @@ the formal two-object headless median improved from 5.746 to 13.865 FPS
 62.87/92.75 ms. See `docs/benchmarks/thor_baseline.md` for the protocol and raw
 result paths.
 
-The current TV5M default is the on-device
-`fp16_best_20260729` bundle built from `tv5-best.pt`.
+The TV5M, TV11M, and TV21M model-menu entries use their on-device
+`fp16_best_20260729` bundles built from `tv5-best.pt`, `tv11-best.pt`, and
+`tv21-best.pt`. Only the selected SAM2 model is resident. Switching models
+resets tracking state but does not restart the GI container.
 
 In mode 2, the coordinator converts masks to at most eight boxes and initializes
 SAM2 using the exact source timestamp. SAM2 stays loaded but receives no frames
