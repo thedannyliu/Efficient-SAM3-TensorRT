@@ -33,7 +33,7 @@ def generate_launch_description() -> LaunchDescription:
     return LaunchDescription(
         [
             DeclareLaunchArgument(
-                "adaptive_display_fps", default_value="true"
+                "adaptive_display_fps", default_value="false"
             ),
             DeclareLaunchArgument(
                 "bundle_dir",
