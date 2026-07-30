@@ -201,6 +201,16 @@ class ModeManager(Node):
             if not script.is_file():
                 raise FileNotFoundError(script)
             environment = os.environ.copy()
+            if (
+                environment.get("GI_RESEARCH_USE_ACK")
+                != "research-evaluation-only"
+            ):
+                raise RuntimeError(
+                    "camera switching is unavailable because the unified UI "
+                    "was started without GI_RESEARCH_USE_ACK; stop it, export "
+                    "GI_RESEARCH_USE_ACK=research-evaluation-only after "
+                    "reading the license files, and start it again"
+                )
             environment.update(
                 {
                     "GI_CAMERA_WIDTH": str(requested[0]),

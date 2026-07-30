@@ -2,6 +2,13 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+EXPECTED_ACK="research-evaluation-only"
+if [[ "${GI_RESEARCH_USE_ACK:-}" != "$EXPECTED_ACK" ]]; then
+  echo "Unified camera switching requires GI_RESEARCH_USE_ACK=$EXPECTED_ACK" >&2
+  echo "Set it only after reading LICENSE.InstinctSAM, LICENSE.SAM, and NOTICE." >&2
+  exit 1
+fi
+
 DESKTOP_PID="$(pgrep -u "$(id -u)" -x gnome-shell | head -1)"
 if [[ -z "$DESKTOP_PID" || ! -r "/proc/$DESKTOP_PID/environ" ]]; then
   echo "No readable GNOME desktop session found for $USER" >&2
