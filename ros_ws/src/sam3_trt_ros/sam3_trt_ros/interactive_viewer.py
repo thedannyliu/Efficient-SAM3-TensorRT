@@ -58,6 +58,18 @@ class InteractiveViewer(Node):
         self.frame_versions = {0: 0, 1: 0, 2: 0}
         self.label_version = 0
         self.label_overlay = None
+        palette = np.asarray(
+            (
+                (0, 255, 0),
+                (0, 128, 255),
+                (255, 128, 0),
+                (255, 0, 255),
+            ),
+            dtype=np.uint8,
+        )
+        self.label_palette = np.zeros((256, 3), dtype=np.uint8)
+        for object_id in range(1, 256):
+            self.label_palette[object_id] = palette[(object_id - 1) % 4]
         self.last_render_state: object = None
         self.window_initialized = False
         self.window_presets = [
@@ -279,17 +291,7 @@ class InteractiveViewer(Node):
         labels = self.bridge.imgmsg_to_cv2(
             message, desired_encoding="mono8"
         )
-        colors = np.zeros((*labels.shape, 3), dtype=np.uint8)
-        palette = (
-            (0, 255, 0),
-            (0, 128, 255),
-            (255, 128, 0),
-            (255, 0, 255),
-        )
-        for object_id in np.unique(labels):
-            if object_id == 0:
-                continue
-            colors[labels == object_id] = palette[(int(object_id) - 1) % 4]
+        colors = self.label_palette[labels]
         mask = (labels != 0).astype(np.uint8) * 255
         if (labels.shape[1], labels.shape[0]) != self.canvas_size:
             colors = cv2.resize(
