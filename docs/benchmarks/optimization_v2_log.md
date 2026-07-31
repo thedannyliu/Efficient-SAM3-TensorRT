@@ -95,3 +95,59 @@ SAM2's current TensorRT bundle has point, box, and track plans but no
 mask-prompt initialization plan. V2-10 therefore requires a new mask prompt
 export/engine and C++ service boundary; relabeling the box API is not a valid
 test.
+
+### V2-10 first implementation and Thor results
+
+Date: 2026-07-30.
+
+Source revisions:
+
+- SAM2 TensorRT `943866e` adds the mask ONNX role, C++ TensorRT path, CUDA
+  mono8 preprocessing, and `/sam/add_mask`.
+- SAM3 integration `f3ab2c7` adds the `box|mask` route and carries decoded GI
+  masks across the ROS boundary.
+- SAM2 TensorRT `fdc1142` and SAM3 integration `a9ea7d1` add reproducible
+  parity sample/evaluation tools.
+
+The TV5M candidate is
+`bundles/sam2.1-tinyvit-5m/fp16_mask_v2_20260730`. Existing encoder,
+point, box, and track ONNX/engines are baseline hardlinks; only the 12,314,358
+byte mask ONNX and its engine are new. The mask engine SHA256 is
+`264b0bd797527251bec05b4d33e99e410080df96222673cf189769e6cb66f40c`.
+TensorRT builder level 5 with zero auxiliary streams took 746.71 seconds.
+
+Clean engine results, warm-up 20 and measured 100:
+
+| Mask batch | Mean | p90 | Object prompts/s |
+|---:|---:|---:|---:|
+| 1 | 1.797 ms | 1.852 ms | 556.64 |
+| 2 | 3.416 ms | 3.469 ms | 585.44 |
+| 4 | 7.354 ms | 7.380 ms | 543.92 |
+| 8 | 15.056 ms | 15.188 ms | 531.36 |
+
+Six real GI masks were captured at 848x480: two `bag` and four `chair`.
+TensorRT versus the matching PyTorch mask graph produced:
+
+- mean/minimum binary mask IoU: 1.000/1.000;
+- input-mask versus TensorRT output IoU: 1.000;
+- minimum object-pointer cosine: 0.9999985;
+- minimum new-memory cosine: 0.9999442;
+- memory-position cosine: 1.000.
+
+The live unified camera smoke completed both routes without a crash. The box
+sample found three objects and the mask sample found two, so their total
+handoff times are not a controlled speed A/B. Subsequent model latency scaled
+normally with object count: 70.58 ms for three box-initialized tracks and
+50.85 ms for two mask-initialized tracks. Direct mask initialization does not
+change the steady tracking graph.
+
+Raw ignored artifacts are under:
+
+```text
+~/Efficient-SAM2-TensorRT/results/benchmarks/mask_prompt_v2_20260730/
+```
+
+Decision: retain `text_handoff_prompt:=mask` as an experimental route. Keep
+`box` as the default until the two routes are propagated through the same
+recorded frames and compared to temporal ground truth. Engine/component
+accuracy already passes the 95% gate.
