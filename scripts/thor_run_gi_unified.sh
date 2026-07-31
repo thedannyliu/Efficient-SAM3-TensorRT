@@ -52,8 +52,10 @@ docker rm -f instinctsam-native instinctsam-detect "$NAME" >/dev/null 2>&1 || tr
 echo "Using RealSense device $HOST_SOURCE as $CONTAINER_SOURCE in the container"
 shared_frame_environment=()
 if [[ "${GI_DIRECT_SHARED_FRAME:-0}" == "1" ]]; then
+  shared_frame_path=/dev/shm/sam3_sam2_frame.bin
+  install -m 0666 /dev/null "$shared_frame_path"
   shared_frame_environment=(
-    -e SHARED_FRAME_PATH=/dev/shm/sam3_sam2_frame.bin
+    -e SHARED_FRAME_PATH="$shared_frame_path"
   )
 fi
 docker run -d --name "$NAME" \
