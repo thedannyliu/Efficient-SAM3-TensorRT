@@ -41,9 +41,9 @@ latency.
 
 | ID | Candidate | Main hypothesis | Accuracy risk | Status |
 |---|---|---|---|---|
-| V2-01 | Separate static batch-2/4 track engines | Exact shapes enable better TensorRT tactics than the dynamic multi-profile plan | None | Planned |
-| V2-02 | Shared-image multi-object track graph | Avoid repeating image features and image-side projections for every object | None | Planned |
-| V2-03 | Device-resident state bank and fused gather | Remove per-frame per-memory packing, pointer copies, and host temporal arrays | None | Planned |
+| V2-01 | Separate static batch-2/4 track engines | Exact shapes enable better TensorRT tactics than the dynamic multi-profile plan | None | In progress |
+| V2-02 | Shared-image multi-object track graph | Avoid repeating image features and image-side projections for every object | None | Implemented; engine pending |
+| V2-03 | Device-resident state bank and fused gather | Remove per-frame per-memory packing, pointer copies, and host temporal arrays | None | Implemented; full A/B pending |
 | V2-04 | CUDA Graph steady-state routes | Reduce launch/enqueue overhead after buffers and shapes become stable | None | Planned |
 | V2-05 | One GPU label/overlay output | Avoid N full-resolution mask D2H transfers and Python composition | None | Planned |
 | V2-06 | Per-layer lower precision in the tracking tail | Accelerate dominant Conv/MatMul/MLP while preserving sensitive operations | Medium | Planned |
@@ -151,3 +151,63 @@ Decision: retain `text_handoff_prompt:=mask` as an experimental route. Keep
 `box` as the default until the two routes are propagated through the same
 recorded frames and compared to temporal ground truth. Engine/component
 accuracy already passes the 95% gate.
+
+## V2-01 static track profiles
+
+Date: 2026-07-30. SAM2 revisions `ca98527` and `9ff00eb` provide isolated
+single-profile builds, explicit runtime-state endpoints, and same-input engine
+parity. The deployed engine was not overwritten.
+
+The first static batch-2 plan used the deployed TV5M FP16 ONNX, builder level
+5, zero auxiliary streams, and a seven-memory/sixteen-pointer optimization
+point. Interleaved warm-up-20/run-100 measurements were:
+
+| Runtime state | Multi-profile mean | Static b2 mean | Latency change |
+|---|---:|---:|---:|
+| 4 memories / 8 pointers | 58.191 ms | 57.560 ms | -1.08% |
+| 7 memories / 16 pointers | 86.378 ms | 85.874 ms | -0.58% |
+
+On identical seeded full-state inputs, static versus multi-profile mask IoU was
+0.998141. Mask cosine was 0.9999994; the minimum reported output cosine was
+0.9999967. This passes the 95% gate, but the speed difference is too small to
+change the bucket decision: batch 2 remains much slower than parallel batch-1
+contexts.
+
+The deployed plan also emitted TensorRT's cross-device-model warning while the
+new plan did not. A new same-day multi-profile control is required before
+attributing the sub-1% full-state result specifically to static shapes.
+
+Static b4 was building as ignored Thor process `87267` when the Windows-to-Thor
+reverse tunnel stopped forwarding SSH. Its result is deliberately recorded as
+unknown, not failed or complete. Artifacts are under:
+
+```text
+~/Efficient-SAM2-TensorRT/results/benchmarks/static_batch_v2_20260730/
+```
+
+## V2-02 shared-image graph boundary
+
+SAM2 revision `85eab22` adds an isolated ONNX rewrite in which the four
+per-frame image feature inputs remain batch one while object memory and pointer
+inputs remain batch N. ONNX `Expand` nodes derive N from the state tensor, so
+the model arithmetic is unchanged and TensorRT can fuse or broadcast instead
+of receiving four physically repeated feature buffers.
+
+Unit tests cover the rewritten input shapes, broadcast nodes, profile shapes,
+and full-state optimization endpoint. The actual TV5M shared-image engine and
+b2/b4 parity/latency are pending Thor access. No C++ runtime or deployed bundle
+has selected this graph.
+
+## V2-03 fused state gather boundary
+
+SAM2 revision `5ba244d` replaces up to fourteen memory packing kernels and
+sixteen pointer copies per object with three pointer-table uploads and fused
+memory/position/pointer gather kernels. The route is opt-in through
+`fused_state_gather:=true`; the default remains false. Revision `b7e5c69` adds
+a deterministic full-tracker A/B that alternates execution order, waits at
+least sixteen frames for full temporal state, and compares every mask pixel.
+
+The CUDA layout test compiled and passed on Thor, along with the existing state
+selection test and both ROS workspaces. The deterministic 1/2/4-object tracker
+A/B and live camera test remain pending because the reverse tunnel failed
+before the new A/B executable could be built. This candidate is not promoted.
