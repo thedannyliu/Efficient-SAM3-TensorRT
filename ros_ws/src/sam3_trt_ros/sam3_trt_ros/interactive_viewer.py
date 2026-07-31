@@ -804,6 +804,7 @@ class InteractiveViewer(Node):
             mode_label,
             f"Camera: {width}x{height} @ {fps} FPS",
             model_label,
+            f"Objects: {int(runtime['object_count'])}",
             (
                 f"Screen: {self.render_fps:.1f} FPS"
                 if self.render_fps > 0.0
