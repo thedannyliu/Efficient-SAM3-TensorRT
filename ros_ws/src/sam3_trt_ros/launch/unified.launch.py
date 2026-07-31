@@ -25,6 +25,7 @@ def generate_launch_description() -> LaunchDescription:
     shared_memory_poll_hz = LaunchConfiguration("shared_memory_poll_hz")
     shared_view_poll_hz = LaunchConfiguration("shared_view_poll_hz")
     smooth_camera_view = LaunchConfiguration("smooth_camera_view")
+    fused_state_gather = LaunchConfiguration("fused_state_gather")
     track_concurrency = LaunchConfiguration("track_concurrency")
     track_bucket_min_objects = LaunchConfiguration(
         "track_bucket_min_objects"
@@ -64,6 +65,9 @@ def generate_launch_description() -> LaunchDescription:
             DeclareLaunchArgument("shared_memory_poll_hz", default_value="240.0"),
             DeclareLaunchArgument("shared_view_poll_hz", default_value="120.0"),
             DeclareLaunchArgument("smooth_camera_view", default_value="false"),
+            DeclareLaunchArgument(
+                "fused_state_gather", default_value="false"
+            ),
             DeclareLaunchArgument("track_concurrency", default_value="4"),
             DeclareLaunchArgument(
                 "track_bucket_min_objects", default_value="4"
@@ -139,6 +143,9 @@ def generate_launch_description() -> LaunchDescription:
                             shared_memory_poll_hz, value_type=float
                         ),
                         "max_objects": 8,
+                        "fused_state_gather": ParameterValue(
+                            fused_state_gather, value_type=bool
+                        ),
                         "track_concurrency": ParameterValue(
                             track_concurrency, value_type=int
                         ),
