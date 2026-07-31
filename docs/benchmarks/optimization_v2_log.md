@@ -207,8 +207,11 @@ Two interleaved full-state runs measured 85.597 ms for the deployed graph and
 the image features before the object-dependent attention/decoder work, so the
 rewrite saves input movement but does not remove the dominant arithmetic.
 
-The b4 plan is pending. No C++ runtime or deployed bundle selects this graph.
-Raw artifacts are under:
+Two interleaved full-state b4 runs averaged 171.119 ms for the baseline and
+169.168 ms for the shared-image candidate, a 1.14% reduction. Same-input
+binary mask IoU was 0.998957. Like b2, this passes the requested quality gate
+but is too small to change the object router or deployment default. No C++
+runtime or deployed bundle selects this graph. Raw artifacts are under:
 
 ```text
 ~/Efficient-SAM2-TensorRT/results/benchmarks/shared_image_v2_20260731/
@@ -248,7 +251,25 @@ SAM2 revision `99c1bb7` adds a fixed-buffer TensorRT CUDA Graph A/B to the
 engine benchmark. This intentionally measures the maximum launch-overhead
 benefit before changing the live tracker to persistent input addresses. A live
 integration is justified only if the engine-only result exceeds measurement
-noise. Thor results are pending the active engine build.
+noise.
+
+The engine-only result was 15.135 to 14.675 ms at the common four-memory,
+eight-pointer state (3.04%), and 21.629 to 21.205 ms at the steady
+seven-memory, sixteen-pointer state (1.96%). Revisions `6511936`, `84f806d`,
+and `2156751` then integrated persistent-address capture in the C++ tracker,
+added safe fallback, and limited graph use by object count.
+
+Three warm-up-30/run-300 single-object tracker repetitions averaged 30.251 ms
+without graph and 29.958 ms with graph, a 0.97% latency reduction. Mask output
+was pixel-identical. Two/four-object thread-local capture was neutral or
+slower, and an eight-object temporal comparison diverged, so the quality-first
+route keeps `track_cuda_graph:=false`. The experimental route is constrained
+to `track_cuda_graph_max_objects:=1`.
+
+A batch-1-only native-Thor track plan was also built to remove unused b2/b4
+profiles from tactic selection. It averaged 21.448 ms versus 21.590 ms for the
+current multi-profile engine (0.66% reduction), with 0.999253 binary mask IoU.
+It is accurate but rejected as too small to deploy.
 
 ## V2-05 label composition
 
@@ -262,7 +283,9 @@ SAM3 revision `c26e7d2` replaces repeated `np.unique` and boolean color scans
 in the viewer with a 256-entry color lookup table. A 640x360 deterministic CPU
 microbenchmark produced identical bytes and changed label coloring from
 11.251 ms to 2.486 ms (4.53x). These are render-path changes and do not alter
-model masks. Thor screen-FPS A/B is pending.
+model masks. In the direct-transport camera A/B, preview composition fell from
+4.386 to 3.797 ms (13.4%); the screen loop remained dominated by OpenCV
+`waitKey` variation, so this is not claimed as a matching screen-FPS gain.
 
 ## V2-08 direct vendor camera transport
 
@@ -277,7 +300,32 @@ The GI source modification remains ignored and is not redistributed. It is
 subject to the General Instinct evaluation/non-commercial license. The tracked
 route defaults off and requires both `GI_DIRECT_SHARED_FRAME=1` for the
 container and `vendor_shared_frame:=true` for the ROS launch. Derived-image and
-Thor camera A/B are pending.
+Thor camera A/B used the same TV5M one-object workload:
+
+| Metric | MJPEG transport | Direct shared frame | Change |
+|---|---:|---:|---:|
+| SAM2 inference | 36.551 ms | 35.999 ms | -1.51% |
+| Processed tracking rate | 27.218 FPS | 27.615 FPS | +1.46% |
+| Input transport | 0.492 ms | 0.387 ms | -21.3% |
+| Raw unique camera rate | 47.623 FPS | 58.346 FPS | +22.5% |
+| Source age | 51.570 ms | 51.711 ms | neutral |
+| Screen render rate | 51.934 FPS | 48.181 FPS | noisy/regressed |
+
+Direct transport substantially increases fresh-frame availability by removing
+JPEG/HTTP work, but it does not accelerate the model. The screen-rate result
+varied in the opposite direction and is not promoted as a rendering win.
+Point initialization through the on-demand raw snapshot succeeded. The ignored
+GI patch SHA256 is
+`bc3a86ed6a9e1fd1bd0f79b72dc9bb51d2b5fb9e7417631e568c9837eb415488`;
+the tested image is
+`instinctsam:thor-r39-unified-api-direct-v2` with image ID
+`sha256:7f2dcdd0d17b533c2b94fd6db109c99820db6cb154097c5af589838b2b50e76c`.
+
+Raw ignored artifacts are under:
+
+```text
+~/Efficient-SAM3-TensorRT/results/benchmarks/direct_camera_v2_20260731/
+```
 
 ## V2-11 empirical object-count router
 
