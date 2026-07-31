@@ -31,6 +31,7 @@ def generate_launch_description() -> LaunchDescription:
         "track_bucket_min_objects"
     )
     track_bucket_size = LaunchConfiguration("track_bucket_size")
+    track_bucket_router = LaunchConfiguration("track_bucket_router")
     text_handoff_prompt = LaunchConfiguration("text_handoff_prompt")
     viewer = LaunchConfiguration("viewer")
     return LaunchDescription(
@@ -73,6 +74,7 @@ def generate_launch_description() -> LaunchDescription:
                 "track_bucket_min_objects", default_value="4"
             ),
             DeclareLaunchArgument("track_bucket_size", default_value="1"),
+            DeclareLaunchArgument("track_bucket_router", default_value=""),
             DeclareLaunchArgument(
                 "text_handoff_prompt", default_value="box"
             ),
@@ -155,6 +157,7 @@ def generate_launch_description() -> LaunchDescription:
                         "track_bucket_size": ParameterValue(
                             track_bucket_size, value_type=int
                         ),
+                        "track_bucket_router": track_bucket_router,
                         "pipeline_overlap": ParameterValue(
                             pipeline_overlap, value_type=bool
                         ),
