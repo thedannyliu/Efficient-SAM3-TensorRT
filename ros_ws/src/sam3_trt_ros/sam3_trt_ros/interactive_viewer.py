@@ -848,6 +848,10 @@ class InteractiveViewer(Node):
         self.stage_ms["display_total"] = (
             render_time - display_start
         ) * 1000.0
+        if self.render_times:
+            interval = render_time - self.render_times[-1]
+            if interval > 0.0:
+                self.render_fps = 1.0 / interval
         self.render_times.append(render_time)
         self.publish_render_metrics(render_time)
         if not self.window_initialized:
@@ -880,7 +884,6 @@ class InteractiveViewer(Node):
     def publish_render_metrics(self, now: float) -> None:
         render = self.cadence(self.render_times)
         raw = self.cadence(self.raw_frame_times)
-        self.render_fps = render.get("fps", 0.0)
         self.raw_view_fps = raw.get("fps", 0.0)
         if now - self.last_render_metrics_time < 1.0 or not render:
             return
@@ -893,6 +896,7 @@ class InteractiveViewer(Node):
             "active_display_fps": self.active_display_fps,
             "adaptive_display_fps": self.adaptive_display_fps,
             "shared_view_poll_hz": self.shared_view_poll_hz,
+            "instant_fps": self.render_fps,
             "render": render,
             "raw_unique_frames": raw,
             "stage_ms": self.stage_ms,
