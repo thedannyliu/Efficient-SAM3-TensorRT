@@ -7,6 +7,19 @@ IMAGE="${GI_UNIFIED_IMAGE:-instinctsam:thor-r39-unified-api}"
 NAME="${GI_CONTAINER_NAME:-instinctsam-unified}"
 PORT="${GI_PORT:-8767}"
 
+gi_frame_ready() {
+  curl -fsS --max-time 2 \
+    "http://127.0.0.1:$PORT/status.json" 2>/dev/null |
+    python3 -c '
+import json
+import sys
+
+value = json.load(sys.stdin)
+if value.get("state") != "running" or int(value.get("frame", 0)) <= 0:
+    raise SystemExit(1)
+' >/dev/null 2>&1
+}
+
 python3 "$REPO_ROOT/scripts/verify_gi_delivery.py" "$GI_DELIVERY_DIR" --skip-tar
 CAMERA_WAIT_SECONDS="${GI_CAMERA_WAIT_SECONDS:-120}"
 HOST_SOURCE=""
@@ -57,8 +70,7 @@ docker run -d --name "$NAME" \
   --cam-fps "${GI_CAMERA_FPS:-30}" >/dev/null
 
 for _ in $(seq 1 150); do
-  if curl -fsS --max-time 2 \
-    "http://127.0.0.1:$PORT/status.json" >/dev/null 2>&1; then
+  if gi_frame_ready; then
     PYTHONPATH="$REPO_ROOT/src" python3 "$REPO_ROOT/scripts/warm_gi.py" \
       --base-url "http://127.0.0.1:$PORT" || \
       echo "InstinctSAM warm-up failed; the first prompt will warm it"
