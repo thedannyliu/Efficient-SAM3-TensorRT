@@ -143,6 +143,10 @@ class InteractiveViewer(Node):
             raise ValueError("display_fps must be positive")
         self.display_period = 1.0 / self.display_fps
         self.next_display_time = perf_counter()
+        self.screen_fps_window_frames = 10
+        self.screen_render_times: deque[float] = deque(
+            maxlen=self.screen_fps_window_frames + 1
+        )
         self.render_times: deque[float] = deque(maxlen=240)
         self.raw_frame_times: deque[float] = deque(maxlen=240)
         self.render_fps = 0.0
@@ -848,10 +852,9 @@ class InteractiveViewer(Node):
         self.stage_ms["display_total"] = (
             render_time - display_start
         ) * 1000.0
-        if self.render_times:
-            interval = render_time - self.render_times[-1]
-            if interval > 0.0:
-                self.render_fps = 1.0 / interval
+        self.screen_render_times.append(render_time)
+        screen_render = self.cadence(self.screen_render_times)
+        self.render_fps = screen_render.get("fps", 0.0)
         self.render_times.append(render_time)
         self.publish_render_metrics(render_time)
         if not self.window_initialized:
@@ -896,7 +899,8 @@ class InteractiveViewer(Node):
             "active_display_fps": self.active_display_fps,
             "adaptive_display_fps": self.adaptive_display_fps,
             "shared_view_poll_hz": self.shared_view_poll_hz,
-            "instant_fps": self.render_fps,
+            "screen_fps": self.render_fps,
+            "screen_fps_window_frames": self.screen_fps_window_frames,
             "render": render,
             "raw_unique_frames": raw,
             "stage_ms": self.stage_ms,
