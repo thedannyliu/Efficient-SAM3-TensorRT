@@ -38,7 +38,7 @@ class InteractiveViewer(Node):
         self.declare_parameter("render_height", 480)
         self.declare_parameter("opengl_view", False)
         self.declare_parameter("shared_view_poll_hz", 120.0)
-        self.declare_parameter("smooth_camera_view", True)
+        self.declare_parameter("smooth_camera_view", False)
         self.declare_parameter(
             "shared_memory_path", "/dev/shm/sam3_sam2_frame.bin"
         )
@@ -56,20 +56,6 @@ class InteractiveViewer(Node):
         self.source_sizes = {0: (1280, 720), 1: (1280, 720)}
         self.frames: dict[int, object] = {}
         self.frame_versions = {0: 0, 1: 0, 2: 0}
-        self.label_version = 0
-        self.label_overlay = None
-        palette = np.asarray(
-            (
-                (0, 255, 0),
-                (0, 128, 255),
-                (255, 128, 0),
-                (255, 0, 255),
-            ),
-            dtype=np.uint8,
-        )
-        self.label_palette = np.zeros((256, 3), dtype=np.uint8)
-        for object_id in range(1, 256):
-            self.label_palette[object_id] = palette[(object_id - 1) % 4]
         self.last_render_state: object = None
         self.window_initialized = False
         self.window_presets = [
@@ -181,20 +167,12 @@ class InteractiveViewer(Node):
             lambda message: self.on_image(1, message),
             qos_profile_sensor_data,
         )
-        if self.smooth_camera_view:
-            self.create_subscription(
-                Image,
-                "/sam/preview_labels",
-                self.on_preview_labels,
-                qos_profile_sensor_data,
-            )
-        else:
-            self.create_subscription(
-                Image,
-                "/sam/preview",
-                lambda message: self.on_image(2, message),
-                qos_profile_sensor_data,
-            )
+        self.create_subscription(
+            Image,
+            "/sam/preview",
+            lambda message: self.on_image(2, message),
+            qos_profile_sensor_data,
+        )
         self.create_subscription(
             String,
             "/instinctsam/result_json",
@@ -287,24 +265,6 @@ class InteractiveViewer(Node):
         except json.JSONDecodeError:
             pass
 
-    def on_preview_labels(self, message: Image) -> None:
-        labels = self.bridge.imgmsg_to_cv2(
-            message, desired_encoding="mono8"
-        )
-        colors = self.label_palette[labels]
-        mask = (labels != 0).astype(np.uint8) * 255
-        if (labels.shape[1], labels.shape[0]) != self.canvas_size:
-            colors = cv2.resize(
-                colors, self.canvas_size, interpolation=cv2.INTER_NEAREST
-            )
-            mask = cv2.resize(
-                mask,
-                self.canvas_size,
-                interpolation=cv2.INTER_NEAREST,
-            )
-        self.label_overlay = (mask, colors)
-        self.label_version += 1
-
     def update_shared_frame(self) -> None:
         now = perf_counter()
         if self.shared_reader is None:
@@ -337,6 +297,10 @@ class InteractiveViewer(Node):
         self.raw_frame_times.append(now)
 
     def poll_shared_frame(self) -> None:
+        if self.mode != SetPipelineMode.Request.HYBRID:
+            return
+        if int(runtime_metrics(self.metrics)["object_count"]) > 0:
+            return
         start = perf_counter()
         self.update_shared_frame()
         self.stage_ms["shared_read"] = (
@@ -686,7 +650,12 @@ class InteractiveViewer(Node):
 
     def display(self) -> None:
         display_start = perf_counter()
-        smooth_mode = self.smooth_camera_view and self.mode == 2
+        runtime = runtime_metrics(self.metrics)
+        smooth_mode = (
+            self.smooth_camera_view
+            and self.mode == SetPipelineMode.Request.HYBRID
+            and int(runtime["object_count"]) == 0
+        )
         now = perf_counter()
         if smooth_mode:
             active_display_fps = self.routed_display_fps()
@@ -725,7 +694,6 @@ class InteractiveViewer(Node):
             self.text,
             self.drag_start,
             self.drag_current,
-            self.label_version,
         )
         if render_state == self.last_render_state and not smooth_mode:
             self.handle_key(cv2.pollKey())
@@ -733,13 +701,6 @@ class InteractiveViewer(Node):
         self.last_render_state = render_state
         compose_start = perf_counter()
         rendered = self.frame.copy()
-        label_overlay = self.label_overlay
-        if smooth_mode and label_overlay is not None:
-            label_mask, label_colors = label_overlay
-            blended = cv2.addWeighted(
-                rendered, 0.55, label_colors, 0.45, 0.0
-            )
-            cv2.copyTo(blended, label_mask, rendered)
         if self.drag_start is not None and self.drag_current is not None:
             cv2.rectangle(
                 rendered,
@@ -775,7 +736,6 @@ class InteractiveViewer(Node):
                 )
             )
             lines.append("Esc=cancel")
-        runtime = runtime_metrics(self.metrics)
         first_line_y = rendered.shape[0] - 12 - (len(lines) - 1) * 28
         for index, line in enumerate(lines):
             cv2.putText(
@@ -889,6 +849,13 @@ class InteractiveViewer(Node):
             "schema_version": 1,
             "mode": self.mode,
             "smooth_camera_view": self.smooth_camera_view,
+            "frame_alignment": (
+                "raw_idle"
+                if self.smooth_camera_view
+                and self.mode == SetPipelineMode.Request.HYBRID
+                and int(runtime_metrics(self.metrics)["object_count"]) == 0
+                else "synchronized_preview"
+            ),
             "opengl_view": self.opengl_view,
             "target_display_fps": self.display_fps,
             "active_display_fps": self.active_display_fps,

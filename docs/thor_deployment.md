@@ -325,13 +325,17 @@ reported 60.54 observed FPS. A subsequent menu request restored 848x480@60 in
 and 59.67 FPS vendor status were all verified. During either reload the UI
 remains open and may appear frozen or blank until the GI API is ready.
 
-Mode 2 defaults to the synchronized SAM2 preview: each displayed source frame
-is paired with the mask computed from that exact frame. This removes the
-moving-camera ghost where a mask from frame `t-1` was drawn on the latest raw
-frame `t`. The tradeoff is that the complete view updates at tracking FPS.
-For a smooth camera at the cost of spatially stale masks, launch with
-`smooth_camera_view:=true`; that path reads the latest raw RGB frame from
-shared memory and composites the newest available label image.
+Mode 2 always uses the synchronized SAM2 preview while objects are active:
+each displayed source frame is paired with the mask computed from that exact
+frame. This removes the moving-camera ghost where a mask from frame `t-1` was
+drawn on raw frame `t`. The complete tracked view therefore updates at real
+tracking FPS rather than presenting stale masks at camera FPS.
+
+`smooth_camera_view:=true` now affects only the zero-object idle view. It reads
+the latest shared RGB frame until the first tracked object appears, then
+automatically switches to synchronized preview. Render metrics report
+`frame_alignment=raw_idle|synchronized_preview`; no supported interactive
+route composites masks onto a newer unmatched frame.
 
 When masks are active, desktop painting and TensorRT contend for compute.
 The original `adaptive_display_fps:=true` rule selected 28 FPS for one object
