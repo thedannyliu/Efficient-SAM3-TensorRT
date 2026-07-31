@@ -51,6 +51,7 @@ latency.
 | V2-08 | Direct Mode 2 camera path | Remove continuous GI MJPEG encode/HTTP/decode from SAM2 tracking | None | Planned |
 | V2-09 | Extend GI Mode 1 TensorRT boundary | Move the remaining profiler-dominant vendor PyTorch components into TensorRT | Medium/license boundary | Planned |
 | V2-10 | Direct mask handoff from GI to SAM2 | Avoid mask-to-box conversion and preserve non-rectangular first-frame evidence | Low | In progress |
+| V2-11 | Empirical object-count router | Select parallel b1, b2, or b4 from measured model/object-count crossovers | None | Implemented; Thor table pending |
 
 The memory-count reduction experiment is intentionally excluded.
 
@@ -211,3 +212,34 @@ The CUDA layout test compiled and passed on Thor, along with the existing state
 selection test and both ROS workspaces. The deterministic 1/2/4-object tracker
 A/B and live camera test remain pending because the reverse tunnel failed
 before the new A/B executable could be built. This candidate is not promoted.
+
+## V2-11 empirical object-count router
+
+The original scheduler has one global bucket size and one minimum-object
+threshold. That cannot express a measured route such as b1 for one to three
+objects, b2 for four to six, and b4 for seven or eight.
+
+The candidate accepts one route entry for every supported object count. For
+example:
+
+```text
+track_bucket_router:=1,1,1,2,2,2,4,4
+```
+
+Changing object count selects the corresponding capacity before groups are
+formed. It does not recreate the tracker, clear prompts, move temporal state,
+or change mask arithmetic. Result JSON records both the legacy configured
+bucket and `track_bucket_route_size`, the actual selected route.
+
+The route must be generated from interleaved 1--8-object measurements for the
+specific engine, power mode, concurrency, and model. The current deployed
+TV5M/11M/21M plans have no measured bucket crossover, so their provisional
+safe table is all b1:
+
+```text
+1,1,1,1,1,1,1,1
+```
+
+The router is infrastructure, not an acceleration claim. It is promoted only
+if static/shared-image/CUDA-Graph candidates make b2 or b4 faster at a real
+object count while preserving at least 95% quality.
