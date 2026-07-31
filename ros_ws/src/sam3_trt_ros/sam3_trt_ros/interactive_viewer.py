@@ -850,7 +850,9 @@ class InteractiveViewer(Node):
             "mode": self.mode,
             "smooth_camera_view": self.smooth_camera_view,
             "frame_alignment": (
-                "raw_idle"
+                "vendor_overlay"
+                if self.mode == SetPipelineMode.Request.INSTINCTSAM
+                else "raw_idle"
                 if self.smooth_camera_view
                 and self.mode == SetPipelineMode.Request.HYBRID
                 and int(runtime_metrics(self.metrics)["object_count"]) == 0
