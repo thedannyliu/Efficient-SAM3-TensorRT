@@ -41,14 +41,14 @@ latency.
 
 | ID | Candidate | Main hypothesis | Accuracy risk | Status |
 |---|---|---|---|---|
-| V2-01 | Separate static batch-2/4 track engines | Exact shapes enable better TensorRT tactics than the dynamic multi-profile plan | None | In progress |
-| V2-02 | Shared-image multi-object track graph | Avoid repeating image features and image-side projections for every object | None | Implemented; engine pending |
-| V2-03 | Device-resident state bank and fused gather | Remove per-frame per-memory packing, pointer copies, and host temporal arrays | None | Implemented; full A/B pending |
-| V2-04 | CUDA Graph steady-state routes | Reduce launch/enqueue overhead after buffers and shapes become stable | None | Planned |
-| V2-05 | One GPU label/overlay output | Avoid N full-resolution mask D2H transfers and Python composition | None | Planned |
+| V2-01 | Separate static batch-2/4 track engines | Exact shapes enable better TensorRT tactics than the dynamic multi-profile plan | None | Rejected: 0.58--1.17% |
+| V2-02 | Shared-image multi-object track graph | Avoid repeating image features and image-side projections for every object | None | b2 rejected: 0.70%; b4 pending |
+| V2-03 | Device-resident state bank and fused gather | Remove per-frame per-memory packing, pointer copies, and host temporal arrays | None | Rejected |
+| V2-04 | CUDA Graph steady-state routes | Reduce launch/enqueue overhead after buffers and shapes become stable | None | Engine A/B implemented |
+| V2-05 | One GPU label/overlay output | Avoid N full-resolution mask D2H transfers and Python composition | None | CPU composition fast path implemented |
 | V2-06 | Per-layer lower precision in the tracking tail | Accelerate dominant Conv/MatMul/MLP while preserving sensitive operations | Medium | Planned |
 | V2-07 | Motion-aware object-update router | Spend full tracking only on selected or moving objects | High | Planned |
-| V2-08 | Direct Mode 2 camera path | Remove continuous GI MJPEG encode/HTTP/decode from SAM2 tracking | None | Planned |
+| V2-08 | Direct Mode 2 camera path | Remove continuous GI MJPEG encode/HTTP/decode from SAM2 tracking | None | Implemented; Thor A/B pending |
 | V2-09 | Extend GI Mode 1 TensorRT boundary | Move the remaining profiler-dominant vendor PyTorch components into TensorRT | Medium/license boundary | Planned |
 | V2-10 | Direct mask handoff from GI to SAM2 | Avoid mask-to-box conversion and preserve non-rectangular first-frame evidence | Low | In progress |
 | V2-11 | Empirical object-count router | Select parallel b1, b2, or b4 from measured model/object-count crossovers | None | Implemented; Thor table pending |
@@ -178,9 +178,14 @@ The deployed plan also emitted TensorRT's cross-device-model warning while the
 new plan did not. A new same-day multi-profile control is required before
 attributing the sub-1% full-state result specifically to static shapes.
 
-Static b4 was building as ignored Thor process `87267` when the Windows-to-Thor
-reverse tunnel stopped forwarding SSH. Its result is deliberately recorded as
-unknown, not failed or complete. Artifacts are under:
+Static b4 completed after the tunnel recovered. Two interleaved full-state
+runs produced 172.862 ms for the deployed multi-profile engine and 170.839 ms
+for the static engine, a 1.17% latency reduction. Same-input binary mask IoU
+was 0.999183 and the minimum output cosine was 0.9999996. Both static b2 and
+b4 are accurate, but neither changes the fact that parallel b1 execution is
+substantially faster on Thor. They are not deployment candidates.
+
+Artifacts are under:
 
 ```text
 ~/Efficient-SAM2-TensorRT/results/benchmarks/static_batch_v2_20260730/
@@ -195,9 +200,19 @@ the model arithmetic is unchanged and TensorRT can fuse or broadcast instead
 of receiving four physically repeated feature buffers.
 
 Unit tests cover the rewritten input shapes, broadcast nodes, profile shapes,
-and full-state optimization endpoint. The actual TV5M shared-image engine and
-b2/b4 parity/latency are pending Thor access. No C++ runtime or deployed bundle
-has selected this graph.
+and full-state optimization endpoint. The TV5M b2 plan passed same-input
+parity with binary mask IoU 0.999341 and minimum output cosine 0.9999992.
+Two interleaved full-state runs measured 85.597 ms for the deployed graph and
+84.999 ms for the shared-input graph, only 0.70% faster. TensorRT still expands
+the image features before the object-dependent attention/decoder work, so the
+rewrite saves input movement but does not remove the dominant arithmetic.
+
+The b4 plan is pending. No C++ runtime or deployed bundle selects this graph.
+Raw artifacts are under:
+
+```text
+~/Efficient-SAM2-TensorRT/results/benchmarks/shared_image_v2_20260731/
+```
 
 ## V2-03 fused state gather boundary
 
@@ -209,9 +224,60 @@ a deterministic full-tracker A/B that alternates execution order, waits at
 least sixteen frames for full temporal state, and compares every mask pixel.
 
 The CUDA layout test compiled and passed on Thor, along with the existing state
-selection test and both ROS workspaces. The deterministic 1/2/4-object tracker
-A/B and live camera test remain pending because the reverse tunnel failed
-before the new A/B executable could be built. This candidate is not promoted.
+selection test and both ROS workspaces. Deterministic tracker A/B results were:
+
+| Objects | Baseline | Fused | Speed change | Binary IoU |
+|---:|---:|---:|---:|---:|
+| 1 | 30.406 ms | 30.553 ms | -0.48% | 1.000000 |
+| 2 | 48.401 ms | 48.575 ms | -0.36% | 0.999742 |
+| 4 | 87.568 ms | 87.209 ms | +0.41% | 0.999493 |
+| 8 | 168.513 ms | 169.573 ms | -0.63% | 0.805386 |
+
+The state copies are not a meaningful latency bottleneck. More importantly,
+the eight-object route accumulates a temporal disagreement, so the option
+remains disabled and is excluded from the empirical router. Raw artifacts are
+under:
+
+```text
+~/Efficient-SAM2-TensorRT/results/benchmarks/fused_gather_v2_20260731/
+```
+
+## V2-04 CUDA Graph launch upper bound
+
+SAM2 revision `99c1bb7` adds a fixed-buffer TensorRT CUDA Graph A/B to the
+engine benchmark. This intentionally measures the maximum launch-overhead
+benefit before changing the live tracker to persistent input addresses. A live
+integration is justified only if the engine-only result exceeds measurement
+noise. Thor results are pending the active engine build.
+
+## V2-05 label composition
+
+Four-object Thor traces showed 28--32 ms of asynchronous C++ preview-label
+composition, while inference itself was about 84--89 ms. The old loop visited
+every preview pixel and then every object. SAM2 revision `2e06d40` changes this
+to one linear pass per object with precomputed resize indices; object overwrite
+order and the mono8 label output are unchanged.
+
+SAM3 revision `c26e7d2` replaces repeated `np.unique` and boolean color scans
+in the viewer with a 256-entry color lookup table. A 640x360 deterministic CPU
+microbenchmark produced identical bytes and changed label coloring from
+11.251 ms to 2.486 ms (4.53x). These are render-path changes and do not alter
+model masks. Thor screen-FPS A/B is pending.
+
+## V2-08 direct vendor camera transport
+
+SAM3 revision `9ce951f` adds an opt-in vendor-shared-frame route. In hybrid
+Mode 2, the local licensed GI patch can write its captured BGR frame directly
+as RGB into the existing host shared-memory contract. The adapter then disables
+the raw MJPEG reader, removing JPEG encode, HTTP multipart transfer, JPEG
+decode, and the second BGR-to-RGB conversion. A byte-exact local writer/reader
+test passed.
+
+The GI source modification remains ignored and is not redistributed. It is
+subject to the General Instinct evaluation/non-commercial license. The tracked
+route defaults off and requires both `GI_DIRECT_SHARED_FRAME=1` for the
+container and `vendor_shared_frame:=true` for the ROS launch. Derived-image and
+Thor camera A/B are pending.
 
 ## V2-11 empirical object-count router
 
