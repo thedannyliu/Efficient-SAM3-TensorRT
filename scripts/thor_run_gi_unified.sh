@@ -50,6 +50,12 @@ fi
 docker image inspect "$IMAGE" >/dev/null
 docker rm -f instinctsam-native instinctsam-detect "$NAME" >/dev/null 2>&1 || true
 echo "Using RealSense device $HOST_SOURCE as $CONTAINER_SOURCE in the container"
+shared_frame_environment=()
+if [[ "${GI_DIRECT_SHARED_FRAME:-0}" == "1" ]]; then
+  shared_frame_environment=(
+    -e SHARED_FRAME_PATH=/dev/shm/sam3_sam2_frame.bin
+  )
+fi
 docker run -d --name "$NAME" \
   --runtime nvidia \
   --network host \
@@ -63,6 +69,7 @@ docker run -d --name "$NAME" \
   -e DETECT_IN_RES="${GI_DETECT_IN_RES:-1152}" \
   -e CROSSOVER="${GI_CROSSOVER:-2}" \
   -e MAX_OBJECTS="${GI_MAX_OBJECTS:-24}" \
+  "${shared_frame_environment[@]}" \
   --restart unless-stopped \
   "$IMAGE" \
   --width "${GI_CAMERA_WIDTH:-1280}" \

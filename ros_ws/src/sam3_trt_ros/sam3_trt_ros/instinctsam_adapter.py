@@ -99,6 +99,7 @@ class InstinctSAMAdapter(Node):
         self.declare_parameter("http_timeout", 1.0)
         self.declare_parameter("gstreamer_mjpeg_decode", True)
         self.declare_parameter("native_raw_stream", True)
+        self.declare_parameter("vendor_shared_frame", False)
         self.declare_parameter("relay_topic", "/hybrid/camera/image_raw")
         self.declare_parameter("shared_memory_path", "")
         self.declare_parameter("shared_memory_max_bytes", 8 * 1024 * 1024)
@@ -119,12 +120,15 @@ class InstinctSAMAdapter(Node):
         shared_memory_path = str(
             self.get_parameter("shared_memory_path").value
         )
+        self.vendor_shared_frame = bool(
+            self.get_parameter("vendor_shared_frame").value
+        )
         self.shared_writer = (
             SharedFrameWriter(
                 shared_memory_path,
                 int(self.get_parameter("shared_memory_max_bytes").value),
             )
-            if shared_memory_path
+            if shared_memory_path and not self.vendor_shared_frame
             else None
         )
         self.last_raw_sequence = 0
@@ -199,7 +203,9 @@ class InstinctSAMAdapter(Node):
             self.get_parameter("native_raw_stream").value
         )
         self.raw_reader.set_enabled(
-            enabled and (self.hybrid_enabled or native_raw_stream)
+            enabled
+            and not (self.hybrid_enabled and self.vendor_shared_frame)
+            and (self.hybrid_enabled or native_raw_stream)
         )
         self.overlay_reader.set_enabled(enabled and not self.hybrid_enabled)
 
@@ -256,6 +262,8 @@ class InstinctSAMAdapter(Node):
         start = perf_counter()
         try:
             status = self.client.status()
+            self.width = int(status.get("source_width", self.width))
+            self.height = int(status.get("source_height", self.height))
             if not self.vendor_ready:
                 self.vendor_ready = True
                 self.update_readers()
@@ -294,7 +302,9 @@ class InstinctSAMAdapter(Node):
                     "image_copy_ms": self.image_copy_ms,
                     "image_publish_ms": self.image_publish_ms,
                     "image_transport": (
-                        "shared_memory"
+                        "vendor_shared_memory"
+                        if self.vendor_shared_frame
+                        else "shared_memory"
                         if self.shared_writer is not None
                         else "ros_image"
                     ),
