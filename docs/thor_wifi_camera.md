@@ -67,7 +67,9 @@ bash scripts/thor_select_camera_demo.sh wifi \
   pipeline_overlap:=false
 ```
 
-The HUD reports `Source: Wi-Fi RTSP`. The first switch recreates the GI
+The HUD reports `Source: Wi-Fi Camera`. Wi-Fi camera resolution and FPS are
+controlled by the source, so the HUD omits the wired camera profile and the
+`C` profile menu is disabled. The first switch recreates the GI
 container and can take 70--120 seconds because both GI models are reloaded.
 
 ## Return to the wired camera

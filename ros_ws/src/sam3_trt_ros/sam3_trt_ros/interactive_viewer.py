@@ -671,8 +671,11 @@ class InteractiveViewer(Node):
             self.model_menu = True
             self.status = "select SAM2 model"
         elif key == ord("c"):
-            self.camera_menu = True
-            self.status = "select camera profile"
+            if self.active_camera_source == "wifi":
+                self.status = "camera profiles are controlled by the Wi-Fi source"
+            else:
+                self.camera_menu = True
+                self.status = "select camera profile"
         elif key == ord("r"):
             self.reset()
         elif key == ord("1"):
@@ -797,8 +800,8 @@ class InteractiveViewer(Node):
             mode_label = "Mode: 1 (SAM3)"
             model_label = "Model: GI SAM3"
             if self.raw_frame is not None:
-                patch_height = min(44, rendered.shape[0])
-                patch_width = min(240, rendered.shape[1])
+                patch_height = min(64, rendered.shape[0])
+                patch_width = min(260, rendered.shape[1])
                 rendered[:patch_height, :patch_width] = self.raw_frame[
                     :patch_height, :patch_width
                 ]
@@ -807,7 +810,7 @@ class InteractiveViewer(Node):
             model_label = f"Model: {self.active_model}"
         width, height, fps = self.active_camera_profile
         source_label = (
-            "Wi-Fi RTSP"
+            "Wi-Fi Camera"
             if self.active_camera_source == "wifi"
             else "Wired RealSense"
         )
@@ -815,7 +818,10 @@ class InteractiveViewer(Node):
         performance_lines = [
             mode_label,
             f"Source: {source_label}",
-            f"Camera: {width}x{height} @ {fps} FPS",
+        ]
+        if self.active_camera_source != "wifi":
+            performance_lines.append(f"Camera: {width}x{height} @ {fps} FPS")
+        performance_lines.extend([
             model_label,
             f"Objects: {int(runtime['object_count'])}",
             (
@@ -828,7 +834,7 @@ class InteractiveViewer(Node):
                 if model_ms is not None
                 else "Model latency: -- ms"
             ),
-        ]
+        ])
         for index, line in enumerate(performance_lines):
             position = (12, 26 + index * 28)
             cv2.putText(
