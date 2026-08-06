@@ -12,6 +12,11 @@ CAMERA_WAIT_SECONDS="${GI_CAMERA_WAIT_SECONDS:-120}"
 HOST_SOURCE=""
 CONTAINER_SOURCE="${GI_CAMERA_URI:-}"
 device_arguments=()
+application_arguments=(
+  --width "${GI_CAMERA_WIDTH:-1280}"
+  --height "${GI_CAMERA_HEIGHT:-720}"
+  --cam-fps "${GI_CAMERA_FPS:-30}"
+)
 if [[ -z "$CONTAINER_SOURCE" ]]; then
   for ((second = 0; second < CAMERA_WAIT_SECONDS; second++)); do
     if [[ -n "${GI_CAMERA_DEVICE:-}" ]]; then
@@ -41,6 +46,10 @@ if [[ -z "$CONTAINER_SOURCE" ]]; then
   echo "Using RealSense device $HOST_SOURCE as $CONTAINER_SOURCE in the container"
 else
   echo "Using the configured network camera URI in the container"
+  # The vendor entrypoint treats SOURCE as a local path and falls back to its
+  # sample clip when `test -e` fails. Its final "$@" lets this last --source
+  # override select the network stream without modifying the vendor image.
+  application_arguments+=(--source "$CONTAINER_SOURCE")
 fi
 docker image inspect "$IMAGE" >/dev/null
 docker rm -f instinctsam-native instinctsam-detect "$NAME" >/dev/null 2>&1 || true
@@ -59,9 +68,7 @@ docker run -d --name "$NAME" \
   -e MAX_OBJECTS="${GI_MAX_OBJECTS:-24}" \
   --restart unless-stopped \
   "$IMAGE" \
-  --width "${GI_CAMERA_WIDTH:-1280}" \
-  --height "${GI_CAMERA_HEIGHT:-720}" \
-  --cam-fps "${GI_CAMERA_FPS:-30}" >/dev/null
+  "${application_arguments[@]}" >/dev/null
 
 for _ in $(seq 1 150); do
   if curl -fsS --max-time 2 \
