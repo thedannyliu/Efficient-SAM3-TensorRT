@@ -33,6 +33,10 @@ tracking see the same source.
 The URI is passed only through `GI_WIFI_CAMERA_URL`/`GI_CAMERA_URI`. Scripts
 and HUD output never print it, because it may contain credentials.
 
+Before replacing a running wired container, the selector asks `ffprobe` to
+open the configured stream. An unreachable server, invalid path, or rejected
+credentials fail without interrupting the current camera runtime.
+
 ## Build on Thor
 
 ```bash
