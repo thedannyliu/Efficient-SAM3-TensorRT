@@ -22,13 +22,21 @@ if [[ -z "$CONTAINER_SOURCE" ]]; then
     if [[ -n "${GI_CAMERA_DEVICE:-}" ]]; then
       test -c "$GI_CAMERA_DEVICE" && HOST_SOURCE="$GI_CAMERA_DEVICE"
     else
-      shopt -s nullglob
-      camera_links=(/dev/v4l/by-id/*RealSense*video-index0)
-      shopt -u nullglob
-      if ((${#camera_links[@]} > 0)); then
-        candidate="$(readlink -f "${camera_links[0]}")"
-        test -c "$candidate" && HOST_SOURCE="$candidate"
-      fi
+      for candidate in /dev/video*; do
+        [[ -c "$candidate" ]] || continue
+        node_name="${candidate##*/}"
+        name_file="/sys/class/video4linux/$node_name/name"
+        [[ -r "$name_file" ]] || continue
+        [[ "$(<"$name_file")" == *RealSense* ]] || continue
+        formats="$(
+          timeout 3 ffprobe -hide_banner -f v4l2 \
+            -list_formats all -i "$candidate" 2>&1 || true
+        )"
+        if grep -q "yuyv422" <<<"$formats"; then
+          HOST_SOURCE="$candidate"
+          break
+        fi
+      done
     fi
     [[ -n "$HOST_SOURCE" ]] && break
     if ((second > 0 && second % 10 == 0)); then
