@@ -18,6 +18,20 @@ if [[ "$MODE" == "wifi" ]]; then
     echo "Set GI_WIFI_CAMERA_URL to the RTSP or HTTP camera URL" >&2
     exit 2
   fi
+  probe_arguments=(
+    -v error
+    -show_entries stream=width,height,r_frame_rate
+    -of json
+  )
+  if [[ "$desired_source" == rtsp://* ]]; then
+    probe_arguments=(-rtsp_transport tcp "${probe_arguments[@]}")
+  fi
+  if ! timeout "${GI_CAMERA_PROBE_SECONDS:-10}" \
+    ffprobe "${probe_arguments[@]}" "$desired_source" \
+    >/dev/null 2>&1; then
+    echo "The configured Wi-Fi camera stream is unavailable; keeping the current camera runtime" >&2
+    exit 1
+  fi
   export GI_CAMERA_URI="$desired_source"
 else
   unset GI_CAMERA_URI
