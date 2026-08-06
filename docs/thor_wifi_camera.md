@@ -72,6 +72,26 @@ controlled by the source, so the HUD omits the wired camera profile and the
 `C` profile menu is disabled. The first switch recreates the GI
 container and can take 70--120 seconds because both GI models are reloaded.
 
+For the `IP Camera for iOS` HTTP source, select `1024x768` as the default
+video resolution in the iOS app before starting the Thor pipeline. Its
+`/video` endpoint does not accept width or height query parameters, and Thor
+does not upscale a lower-resolution stream because that adds work without
+recovering image detail.
+
+The licensed GI image burns its own FPS text into Mode 1 overlays. Build the
+local derived image once to remove only that duplicate text:
+
+```bash
+cd ~/Efficient-SAM3-TensorRT-wifi-camera
+GI_RESEARCH_USE_ACK=research-evaluation-only \
+  bash scripts/thor_build_gi_no_overlay_fps.sh
+export GI_UNIFIED_IMAGE=instinctsam:thor-r39-unified-api-no-overlay-fps
+```
+
+The derived image remains local to Thor and is not pushed to GitHub or a
+container registry. The unified ROS HUD continues to report Screen FPS and
+model latency in both modes.
+
 ## Return to the wired camera
 
 ```bash

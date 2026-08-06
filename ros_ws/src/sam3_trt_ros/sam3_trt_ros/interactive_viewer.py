@@ -799,12 +799,6 @@ class InteractiveViewer(Node):
         if self.mode == SetPipelineMode.Request.INSTINCTSAM:
             mode_label = "Mode: 1 (SAM3)"
             model_label = "Model: GI SAM3"
-            if self.raw_frame is not None:
-                patch_height = min(64, rendered.shape[0])
-                patch_width = min(260, rendered.shape[1])
-                rendered[:patch_height, :patch_width] = self.raw_frame[
-                    :patch_height, :patch_width
-                ]
         else:
             mode_label = "Mode: 2 (SAM3 -> SAM2)"
             model_label = f"Model: {self.active_model}"
