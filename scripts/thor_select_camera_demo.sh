@@ -18,17 +18,37 @@ if [[ "$MODE" == "wifi" ]]; then
     echo "Set GI_WIFI_CAMERA_URL to the RTSP or HTTP camera URL" >&2
     exit 2
   fi
-  probe_arguments=(
-    -v error
-    -show_entries stream=width,height,r_frame_rate
-    -of json
-  )
-  if [[ "$desired_source" == rtsp://* ]]; then
-    probe_arguments=(-rtsp_transport tcp "${probe_arguments[@]}")
+  probe_ok=false
+  if [[ "$desired_source" == http://* || "$desired_source" == https://* ]]; then
+    http_status=000
+    received_bytes=0
+    read -r http_status received_bytes < <(
+      curl --silent --show-error \
+        --max-time "${GI_CAMERA_PROBE_SECONDS:-10}" \
+        --output /dev/null \
+        --write-out '%{http_code} %{size_download}' \
+        "$desired_source" 2>/dev/null || true
+    ) || true
+    if [[ "$http_status" == 2?? ]] && \
+      (( ${received_bytes%.*} >= 1024 )); then
+      probe_ok=true
+    fi
+  else
+    probe_arguments=(
+      -v error
+      -show_entries stream=width,height,r_frame_rate
+      -of json
+    )
+    if [[ "$desired_source" == rtsp://* ]]; then
+      probe_arguments=(-rtsp_transport tcp "${probe_arguments[@]}")
+    fi
+    if timeout "${GI_CAMERA_PROBE_SECONDS:-10}" \
+      ffprobe "${probe_arguments[@]}" "$desired_source" \
+      >/dev/null 2>&1; then
+      probe_ok=true
+    fi
   fi
-  if ! timeout "${GI_CAMERA_PROBE_SECONDS:-10}" \
-    ffprobe "${probe_arguments[@]}" "$desired_source" \
-    >/dev/null 2>&1; then
+  if [[ "$probe_ok" != true ]]; then
     echo "The configured Wi-Fi camera stream is unavailable; keeping the current camera runtime" >&2
     exit 1
   fi
