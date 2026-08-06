@@ -41,6 +41,7 @@ class ModeManager(Node):
         self.active_mode = int(self.get_parameter("default_mode").value)
         self.camera_profile = (1280, 720, 30.0)
         self.camera_observed_fps = 0.0
+        self.camera_source = "wired"
         self.create_service(
             SetPipelineMode, "/sam3_pipeline/set_mode", self.on_set_mode
         )
@@ -75,6 +76,7 @@ class ModeManager(Node):
                 "actual_height": height,
                 "requested_fps": fps,
                 "observed_fps": self.camera_observed_fps,
+                "source": self.camera_source,
                 "switch_ms": switch_ms,
             },
             separators=(",", ":"),
@@ -107,6 +109,31 @@ class ModeManager(Node):
             float(values["--cam-fps"]),
         )
 
+    def read_container_camera_source(self) -> str:
+        completed = subprocess.run(
+            [
+                "docker",
+                "inspect",
+                "--format",
+                "{{json .Config.Env}}",
+                "instinctsam-unified",
+            ],
+            text=True,
+            capture_output=True,
+            timeout=5,
+            check=True,
+        )
+        environment = json.loads(completed.stdout)
+        source = next(
+            (
+                item.split("=", 1)[1]
+                for item in environment
+                if item.startswith("SOURCE=")
+            ),
+            "",
+        )
+        return "wired" if source.startswith("/dev/") else "wifi"
+
     def initialize_mode(self) -> None:
         if self.ready:
             return
@@ -121,6 +148,7 @@ class ModeManager(Node):
         self.ready = True
         try:
             self.camera_profile = self.read_container_camera_profile()
+            self.camera_source = self.read_container_camera_source()
         except Exception as error:
             self.get_logger().warning(f"cannot read camera profile: {error}")
         try:
@@ -249,6 +277,7 @@ class ModeManager(Node):
             actual_height, actual_width = frame.shape[:2]
             switch_ms = (perf_counter() - start) * 1000.0
             self.camera_profile = (actual_width, actual_height, requested[2])
+            self.camera_source = self.read_container_camera_source()
             self.publish_camera_profile(switch_ms)
             response.success = True
             response.actual_width = actual_width

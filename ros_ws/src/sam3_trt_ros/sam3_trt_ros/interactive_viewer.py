@@ -120,6 +120,7 @@ class InteractiveViewer(Node):
         ]
         self.active_camera_profile = (1280, 720, 30)
         self.camera_observed_fps = 0.0
+        self.active_camera_source = "wired"
         self.smooth_camera_view = bool(
             self.get_parameter("smooth_camera_view").value
         )
@@ -365,6 +366,7 @@ class InteractiveViewer(Node):
             self.source_sizes[0] = self.active_camera_profile[:2]
             self.source_sizes[1] = self.active_camera_profile[:2]
             self.camera_observed_fps = float(value.get("observed_fps", 0.0))
+            self.active_camera_source = str(value.get("source", "wired"))
         except (json.JSONDecodeError, KeyError, TypeError, ValueError):
             return
 
@@ -723,6 +725,7 @@ class InteractiveViewer(Node):
             self.camera_switching,
             self.active_model,
             self.active_camera_profile,
+            self.active_camera_source,
             self.camera_observed_fps,
             self.text,
             self.drag_start,
@@ -803,9 +806,15 @@ class InteractiveViewer(Node):
             mode_label = "Mode: 2 (SAM3 -> SAM2)"
             model_label = f"Model: {self.active_model}"
         width, height, fps = self.active_camera_profile
+        source_label = (
+            "Wi-Fi RTSP"
+            if self.active_camera_source == "wifi"
+            else "Wired RealSense"
+        )
         model_ms = runtime["model_ms"]
         performance_lines = [
             mode_label,
+            f"Source: {source_label}",
             f"Camera: {width}x{height} @ {fps} FPS",
             model_label,
             f"Objects: {int(runtime['object_count'])}",

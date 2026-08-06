@@ -1,7 +1,7 @@
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.conditions import IfCondition
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import EnvironmentVariable, LaunchConfiguration
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 
@@ -22,6 +22,7 @@ def generate_launch_description() -> LaunchDescription:
     )
     render_height = LaunchConfiguration("render_height")
     render_width = LaunchConfiguration("render_width")
+    repository_root = LaunchConfiguration("repository_root")
     shared_memory_poll_hz = LaunchConfiguration("shared_memory_poll_hz")
     shared_view_poll_hz = LaunchConfiguration("shared_view_poll_hz")
     smooth_camera_view = LaunchConfiguration("smooth_camera_view")
@@ -60,6 +61,13 @@ def generate_launch_description() -> LaunchDescription:
             ),
             DeclareLaunchArgument("render_height", default_value="480"),
             DeclareLaunchArgument("render_width", default_value="848"),
+            DeclareLaunchArgument(
+                "repository_root",
+                default_value=EnvironmentVariable(
+                    "SAM3_REPOSITORY_ROOT",
+                    default_value="/home/ril-thor/Efficient-SAM3-TensorRT",
+                ),
+            ),
             DeclareLaunchArgument("shared_memory_poll_hz", default_value="240.0"),
             DeclareLaunchArgument("shared_view_poll_hz", default_value="120.0"),
             DeclareLaunchArgument("smooth_camera_view", default_value="false"),
@@ -103,6 +111,7 @@ def generate_launch_description() -> LaunchDescription:
                         "default_mode": ParameterValue(
                             default_mode, value_type=int
                         ),
+                        "repository_root": repository_root,
                     }
                 ],
             ),

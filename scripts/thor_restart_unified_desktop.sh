@@ -21,6 +21,9 @@ if value.get("state") != "running" or int(value.get("frame", 0)) <= 0:
 }
 
 camera_available() {
+  if [[ -n "${GI_CAMERA_URI:-}" ]]; then
+    return 0
+  fi
   if [[ -n "${GI_CAMERA_DEVICE:-}" ]]; then
     test -c "$GI_CAMERA_DEVICE"
     return
@@ -71,7 +74,11 @@ export THOR_DESKTOP_WAIT_SECONDS="${THOR_DESKTOP_WAIT_SECONDS:-120}"
 if gi_camera_ready; then
   echo "Preflight: reusing the healthy GI camera runtime"
 else
-  echo "Preflight: waiting for the RealSense color camera"
+  if [[ -n "${GI_CAMERA_URI:-}" ]]; then
+    echo "Preflight: network camera URI configured"
+  else
+    echo "Preflight: waiting for the RealSense color camera"
+  fi
   camera_ready=false
   for ((second = 0; second < CAMERA_WAIT_SECONDS; second++)); do
     if camera_available; then
@@ -84,11 +91,11 @@ else
     sleep 1
   done
   if [[ "$camera_ready" != true ]]; then
-    echo "RealSense color camera did not appear within $CAMERA_WAIT_SECONDS seconds" >&2
+    echo "Configured camera source did not become available within $CAMERA_WAIT_SECONDS seconds" >&2
     ls -l /dev/v4l/by-id >&2 || true
     exit 1
   fi
-  echo "Preflight: camera found; cold GI loading can take about 2 minutes"
+  echo "Preflight: camera source found; cold GI loading can take about 2 minutes"
 fi
 
 bash "$REPO_ROOT/scripts/thor_stop_unified_desktop.sh"

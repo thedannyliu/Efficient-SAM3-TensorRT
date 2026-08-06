@@ -10,38 +10,45 @@ PORT="${GI_PORT:-8767}"
 python3 "$REPO_ROOT/scripts/verify_gi_delivery.py" "$GI_DELIVERY_DIR" --skip-tar
 CAMERA_WAIT_SECONDS="${GI_CAMERA_WAIT_SECONDS:-120}"
 HOST_SOURCE=""
-for ((second = 0; second < CAMERA_WAIT_SECONDS; second++)); do
-  if [[ -n "${GI_CAMERA_DEVICE:-}" ]]; then
-    test -c "$GI_CAMERA_DEVICE" && HOST_SOURCE="$GI_CAMERA_DEVICE"
-  else
-    shopt -s nullglob
-    camera_links=(/dev/v4l/by-id/*RealSense*video-index0)
-    shopt -u nullglob
-    if ((${#camera_links[@]} > 0)); then
-      candidate="$(readlink -f "${camera_links[0]}")"
-      test -c "$candidate" && HOST_SOURCE="$candidate"
+CONTAINER_SOURCE="${GI_CAMERA_URI:-}"
+device_arguments=()
+if [[ -z "$CONTAINER_SOURCE" ]]; then
+  for ((second = 0; second < CAMERA_WAIT_SECONDS; second++)); do
+    if [[ -n "${GI_CAMERA_DEVICE:-}" ]]; then
+      test -c "$GI_CAMERA_DEVICE" && HOST_SOURCE="$GI_CAMERA_DEVICE"
+    else
+      shopt -s nullglob
+      camera_links=(/dev/v4l/by-id/*RealSense*video-index0)
+      shopt -u nullglob
+      if ((${#camera_links[@]} > 0)); then
+        candidate="$(readlink -f "${camera_links[0]}")"
+        test -c "$candidate" && HOST_SOURCE="$candidate"
+      fi
     fi
+    [[ -n "$HOST_SOURCE" ]] && break
+    if ((second > 0 && second % 10 == 0)); then
+      echo "Waiting for the RealSense color camera (${second}s)"
+    fi
+    sleep 1
+  done
+  CONTAINER_SOURCE="/dev/video4"
+  if [[ -z "$HOST_SOURCE" ]]; then
+    echo "RealSense color device did not appear within $CAMERA_WAIT_SECONDS seconds" >&2
+    echo "Reconnect the camera or set GI_CAMERA_DEVICE explicitly" >&2
+    exit 1
   fi
-  [[ -n "$HOST_SOURCE" ]] && break
-  if ((second > 0 && second % 10 == 0)); then
-    echo "Waiting for the RealSense color camera (${second}s)"
-  fi
-  sleep 1
-done
-CONTAINER_SOURCE="/dev/video4"
-if [[ -z "$HOST_SOURCE" ]]; then
-  echo "RealSense color device did not appear within $CAMERA_WAIT_SECONDS seconds" >&2
-  echo "Reconnect the camera or set GI_CAMERA_DEVICE explicitly" >&2
-  exit 1
+  device_arguments=(--device "$HOST_SOURCE:$CONTAINER_SOURCE")
+  echo "Using RealSense device $HOST_SOURCE as $CONTAINER_SOURCE in the container"
+else
+  echo "Using the configured network camera URI in the container"
 fi
 docker image inspect "$IMAGE" >/dev/null
 docker rm -f instinctsam-native instinctsam-detect "$NAME" >/dev/null 2>&1 || true
-echo "Using RealSense device $HOST_SOURCE as $CONTAINER_SOURCE in the container"
 docker run -d --name "$NAME" \
   --runtime nvidia \
   --network host \
   --ipc host \
-  --device "$HOST_SOURCE:$CONTAINER_SOURCE" \
+  "${device_arguments[@]}" \
   -v instinctsam-trt:/root/.cache/instinctsam/tensorrt \
   -e PORT="$PORT" \
   -e SOURCE="$CONTAINER_SOURCE" \
