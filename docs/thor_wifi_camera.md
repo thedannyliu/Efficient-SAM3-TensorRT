@@ -90,7 +90,10 @@ export GI_UNIFIED_IMAGE=instinctsam:thor-r39-unified-api-no-overlay-fps
 
 The derived image remains local to Thor and is not pushed to GitHub or a
 container registry. The unified ROS HUD continues to report Screen FPS and
-model latency in both modes.
+model latency in both modes. It also disables the redundant Hugging Face
+download used while constructing the Hiera trunk; the runtime immediately
+loads the licensed local multiresolution checkpoint instead, so wired and
+Wi-Fi startup do not depend on Thor DNS or Internet access.
 
 ## Return to the wired camera
 
