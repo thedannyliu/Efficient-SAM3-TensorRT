@@ -832,24 +832,36 @@ class InteractiveViewer(Node):
         mode_width = cv2.getTextSize(
             mode_label, font, font_scale, text_thickness
         )[0][0]
-        screen_label = (
-            f"Screen: {self.render_fps:.1f} FPS"
+        frame_rate_label = (
+            f"Frame Rate: {self.render_fps:.1f} FPS"
             if self.render_fps > 0.0
-            else "Screen: -- FPS"
+            else "Frame Rate: -- FPS"
         )
+        prompt_label = "Open Vocabulary Search: "
+        prompt_y = rendered.shape[0] - 12
+        prompt_value_x = 12 + cv2.getTextSize(
+            prompt_label, font, font_scale, text_thickness
+        )[0][0] + 4
         performance_lines = [
             (
-                f"No. of objects tracked: {int(runtime['object_count'])}",
+                f"No. of Objects Tracked: {int(runtime['object_count'])}",
                 (12, 26),
+                (80, 230, 230),
             ),
-            (screen_label, (12, 54)),
-            (mode_label, (rendered.shape[1] - mode_width - 12, 26)),
+            (frame_rate_label, (12, 54), (80, 230, 230)),
             (
-                f"Open Vocabulary Search: {search_text}",
-                (12, rendered.shape[0] - 12),
+                mode_label,
+                (rendered.shape[1] - mode_width - 12, 26),
+                (80, 230, 230),
             ),
+            (
+                prompt_label,
+                (12, prompt_y),
+                (80, 230, 230),
+            ),
+            (search_text, (prompt_value_x, prompt_y), (80, 230, 80)),
         ]
-        for line, position in performance_lines:
+        for line, position, color in performance_lines:
             cv2.putText(
                 rendered,
                 line,
@@ -866,7 +878,7 @@ class InteractiveViewer(Node):
                 position,
                 font,
                 font_scale,
-                (80, 230, 230),
+                color,
                 text_thickness,
                 cv2.LINE_AA,
             )
