@@ -79,6 +79,8 @@ class InteractiveViewer(Node):
         self.camera_switching = False
         self.text_pending = False
         self.text = ""
+        self.pending_text_prompt = ""
+        self.active_text_prompt = ""
         self.status = (
             "t=text, m=model, c=camera, click=point, drag=box, [ ]=window"
         )
@@ -349,6 +351,7 @@ class InteractiveViewer(Node):
     def on_mode(self, message: UInt8) -> None:
         self.mode = int(message.data)
         self.metrics = {}
+        self.active_text_prompt = ""
         self.status = (
             "mode 1: General Instinct SAM3/SAM3.1"
             if self.mode == 1
@@ -492,17 +495,35 @@ class InteractiveViewer(Node):
         request.text = text
         request.confidence = self.confidence
         self.text_pending = True
+        self.pending_text_prompt = text
         future = client.call_async(request)
         future.add_done_callback(self.on_text_response)
         self.status = f"detecting: {text}"
 
     def on_text_response(self, future: object) -> None:
         self.text_pending = False
-        self.on_action_response(future)
+        try:
+            response = future.result()
+            if response.success:
+                self.active_text_prompt = self.pending_text_prompt
+            self.status = response.message
+        except Exception as error:
+            self.status = str(error)
+        finally:
+            self.pending_text_prompt = ""
 
     def on_action_response(self, future: object) -> None:
         try:
             response = future.result()
+            self.status = response.message
+        except Exception as error:
+            self.status = str(error)
+
+    def on_reset_response(self, future: object) -> None:
+        try:
+            response = future.result()
+            if response.success:
+                self.active_text_prompt = ""
             self.status = response.message
         except Exception as error:
             self.status = str(error)
@@ -513,7 +534,7 @@ class InteractiveViewer(Node):
             self.status = "reset service is not ready"
             return
         future = client.call_async(Trigger.Request())
-        future.add_done_callback(self.on_action_response)
+        future.add_done_callback(self.on_reset_response)
         self.metrics = {}
         self.status = "resetting"
 
@@ -731,6 +752,7 @@ class InteractiveViewer(Node):
             self.active_camera_source,
             self.camera_observed_fps,
             self.text,
+            self.active_text_prompt,
             self.drag_start,
             self.drag_current,
             self.label_version,
@@ -759,8 +781,6 @@ class InteractiveViewer(Node):
         lines = []
         if self.model_switching or self.camera_switching or self.text_pending:
             lines.append(self.status)
-        if self.entering_text:
-            lines.append(f"> {self.text}_")
         if self.model_menu:
             lines.append("select SAM2 model")
             lines.extend(
@@ -798,19 +818,23 @@ class InteractiveViewer(Node):
             )
         if self.mode == SetPipelineMode.Request.INSTINCTSAM:
             mode_label = "Mode: 1 (SAM3)"
-            model_label = "Model: GI SAM3"
         else:
             mode_label = "Mode: 2 (SAM3 -> SAM2)"
-            model_label = f"Model: {self.active_model}"
+        if self.entering_text:
+            search_text = f"{self.text}_"
+        elif self.text_pending:
+            search_text = self.pending_text_prompt
+        else:
+            search_text = self.active_text_prompt or "--"
         performance_lines = [
             mode_label,
-            f"Objects: {int(runtime['object_count'])}",
+            f"No. of objects tracked: {int(runtime['object_count'])}",
             (
                 f"Screen: {self.render_fps:.1f} FPS"
                 if self.render_fps > 0.0
                 else "Screen: -- FPS"
             ),
-            model_label,
+            f"Open Vocabulary Search: {search_text}",
         ]
         for index, line in enumerate(performance_lines):
             position = (12, 26 + index * 28)
