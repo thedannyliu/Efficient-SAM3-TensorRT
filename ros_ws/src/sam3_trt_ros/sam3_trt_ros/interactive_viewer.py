@@ -804,7 +804,7 @@ class InteractiveViewer(Node):
             )
             lines.append("Esc=cancel")
         runtime = runtime_metrics(self.metrics)
-        first_line_y = rendered.shape[0] - 12 - (len(lines) - 1) * 28
+        first_line_y = rendered.shape[0] - 44 - (len(lines) - 1) * 28
         for index, line in enumerate(lines):
             cv2.putText(
                 rendered,
@@ -826,24 +826,36 @@ class InteractiveViewer(Node):
             search_text = self.pending_text_prompt
         else:
             search_text = self.active_text_prompt or "--"
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = 0.62
+        text_thickness = 2
+        mode_width = cv2.getTextSize(
+            mode_label, font, font_scale, text_thickness
+        )[0][0]
+        screen_label = (
+            f"Screen: {self.render_fps:.1f} FPS"
+            if self.render_fps > 0.0
+            else "Screen: -- FPS"
+        )
         performance_lines = [
-            mode_label,
-            f"No. of objects tracked: {int(runtime['object_count'])}",
             (
-                f"Screen: {self.render_fps:.1f} FPS"
-                if self.render_fps > 0.0
-                else "Screen: -- FPS"
+                f"No. of objects tracked: {int(runtime['object_count'])}",
+                (12, 26),
             ),
-            f"Open Vocabulary Search: {search_text}",
+            (screen_label, (12, 54)),
+            (mode_label, (rendered.shape[1] - mode_width - 12, 26)),
+            (
+                f"Open Vocabulary Search: {search_text}",
+                (12, rendered.shape[0] - 12),
+            ),
         ]
-        for index, line in enumerate(performance_lines):
-            position = (12, 26 + index * 28)
+        for line, position in performance_lines:
             cv2.putText(
                 rendered,
                 line,
                 position,
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.62,
+                font,
+                font_scale,
                 (0, 0, 0),
                 4,
                 cv2.LINE_AA,
@@ -852,10 +864,10 @@ class InteractiveViewer(Node):
                 rendered,
                 line,
                 position,
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.62,
+                font,
+                font_scale,
                 (80, 230, 230),
-                2,
+                text_thickness,
                 cv2.LINE_AA,
             )
         self.stage_ms["compose"] = (
