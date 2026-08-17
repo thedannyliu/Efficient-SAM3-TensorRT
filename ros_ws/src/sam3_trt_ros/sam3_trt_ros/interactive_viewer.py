@@ -802,33 +802,16 @@ class InteractiveViewer(Node):
         else:
             mode_label = "Mode: 2 (SAM3 -> SAM2)"
             model_label = f"Model: {self.active_model}"
-        width, height, fps = self.active_camera_profile
-        source_label = (
-            "Wi-Fi Camera"
-            if self.active_camera_source == "wifi"
-            else "Wired RealSense"
-        )
-        model_ms = runtime["model_ms"]
         performance_lines = [
             mode_label,
-            f"Source: {source_label}",
-        ]
-        if self.active_camera_source != "wifi":
-            performance_lines.append(f"Camera: {width}x{height} @ {fps} FPS")
-        performance_lines.extend([
-            model_label,
             f"Objects: {int(runtime['object_count'])}",
             (
                 f"Screen: {self.render_fps:.1f} FPS"
                 if self.render_fps > 0.0
                 else "Screen: -- FPS"
             ),
-            (
-                f"Model latency: {float(model_ms):.1f} ms"
-                if model_ms is not None
-                else "Model latency: -- ms"
-            ),
-        ])
+            model_label,
+        ]
         for index, line in enumerate(performance_lines):
             position = (12, 26 + index * 28)
             cv2.putText(
