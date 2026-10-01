@@ -2,7 +2,7 @@ import unittest
 
 import onnx
 
-from scripts.set_onnx_output_dtype import set_output_dtype
+from scripts.export.set_onnx_output_dtype import set_output_dtype
 
 
 class OnnxOutputDtypeTest(unittest.TestCase):

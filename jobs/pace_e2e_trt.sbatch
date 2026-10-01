@@ -27,7 +27,7 @@ if [[ -n "${VISION_ENGINE_CALL_LIMIT:-}" ]]; then
 fi
 
 nvidia-smi
-python scripts/native_vos_baseline.py \
+python scripts/benchmark/native_vos_baseline.py \
   --manifest "${MANIFEST:?set MANIFEST to the SA-V JSONL}" \
   --data-root "${DATA_ROOT:?set DATA_ROOT to the benchmark repository}" \
   --checkpoint "${CHECKPOINT:-checkpoints/sam3.1_multiplex.pt}" \

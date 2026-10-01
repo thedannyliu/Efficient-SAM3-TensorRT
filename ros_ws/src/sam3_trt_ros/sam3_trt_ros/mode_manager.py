@@ -197,7 +197,7 @@ class ModeManager(Node):
             repository_root = Path(
                 str(self.get_parameter("repository_root").value)
             )
-            script = repository_root / "scripts" / "thor_run_gi_unified.sh"
+            script = repository_root / "scripts/thor" / "thor_run_gi_unified.sh"
             if not script.is_file():
                 raise FileNotFoundError(script)
             environment = os.environ.copy()

@@ -27,7 +27,7 @@ mixed_onnx="${run_dir}/vision_trunk.mixed.onnx"
 mkdir -p "${run_dir}" logs
 
 nvidia-smi
-python scripts/quantize_vision_onnx.py \
+python scripts/export/quantize_vision_onnx.py \
   --onnx "${source_dir}/vision_trunk.onnx" \
   --output "${stage_one}" \
   --report "${run_dir}/core_quantization.json" \
@@ -39,7 +39,7 @@ python scripts/quantize_vision_onnx.py \
   --mha-accumulation-dtype fp32 \
   --scope-regex "scaled_dot_product_attention"
 
-python scripts/quantize_vision_onnx.py \
+python scripts/export/quantize_vision_onnx.py \
   --onnx "${stage_one}" \
   --output "${mixed_onnx}" \
   --report "${run_dir}/rest_quantization.json" \
@@ -52,7 +52,7 @@ python scripts/quantize_vision_onnx.py \
   --scope-map-onnx "${source_dir}/vision_trunk.onnx" \
   --scope-regex "(attn\\.(qkv|proj)|\\.mlp)"
 
-python scripts/build_benchmark_engine.py \
+python scripts/benchmark/build_benchmark_engine.py \
   --onnx "${mixed_onnx}" \
   --engine "${run_dir}/vision_trunk.mixed.engine" \
   --reference "${source_dir}/reference.pt" \

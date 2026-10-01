@@ -5,7 +5,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from scripts.validate_vision_artifacts import load_normalized_image
+from scripts.export.validate_vision_artifacts import load_normalized_image
 
 
 class ArtifactInputTest(unittest.TestCase):

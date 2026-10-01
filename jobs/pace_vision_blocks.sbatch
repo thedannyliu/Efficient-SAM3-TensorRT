@@ -27,7 +27,7 @@ engine_path="${run_dir}/vision_trunk.fp8.engine"
 mkdir -p "${run_dir}" logs
 
 nvidia-smi
-python scripts/quantize_vision_onnx.py \
+python scripts/export/quantize_vision_onnx.py \
   --onnx "${source_dir}/vision_trunk.onnx" \
   --output "${quantized_onnx}" \
   --report "${run_dir}/quantization.json" \
@@ -36,7 +36,7 @@ python scripts/quantize_vision_onnx.py \
   --mode fp8 \
   --scope-regex "${scope_regex}"
 
-python scripts/build_benchmark_engine.py \
+python scripts/benchmark/build_benchmark_engine.py \
   --onnx "${quantized_onnx}" \
   --engine "${engine_path}" \
   --reference "${source_dir}/reference.pt" \

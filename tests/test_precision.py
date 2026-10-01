@@ -4,7 +4,7 @@ from pathlib import Path
 import onnx
 
 from sam31_trt.precision import PrecisionRule
-from scripts.quantize_vision_onnx import evenly_spaced_paths, semantic_scope
+from scripts.export.quantize_vision_onnx import evenly_spaced_paths, semantic_scope
 
 
 class PrecisionRuleTest(unittest.TestCase):

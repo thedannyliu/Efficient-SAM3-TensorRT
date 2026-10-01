@@ -1,65 +1,58 @@
-# Efficient SAM3 TensorRT
+# SAM3 TensorRT and Thor integration
 
-This repository measures and optimizes Meta's native SAM 3.1 Object Multiplex
-pipeline before deployment to Jetson Thor. The acceptance threshold is a task
-mIoU retention of at least 90% relative to the official BF16 PyTorch runtime.
+Export and benchmark SAM 3.1 vision components, and integrate text/geometry
+tracking into a Jetson Thor ROS 2 camera pipeline. The repository separates
+precision experiments from the deployed viewer and detector-to-SAM2 handoff.
 
-Generated checkpoints, ONNX graphs, TensorRT engines, logs, and benchmark
-results are intentionally ignored.
+## Two workflows
 
-## Pinned inputs
+| Workflow | Entry points |
+| --- | --- |
+| Native SAM 3.1 export and precision experiments | `scripts/export/`, `scripts/benchmark/`, `jobs/` |
+| Thor camera, viewer and SAM2 handoff | `scripts/thor/`, `ros_ws/`, `src/sam31_trt/` |
 
-- Meta SAM 3 source: commit `46957e47805eaa273f4aa7bbbd25a88bca9108ce`
-- Checkpoint: `facebook/sam3.1/sam3.1_multiplex.pt`
-  (`sha256:0567debeec80ba4ac6369540c6c248025283cb3ff2b92827509e57e2b3541cb6`)
-- First accuracy smoke: the fixed SA-V point-prompt subset owned by
-  `efficientsam3-benchmark`
-- PACE QOS: `embers`
+The Thor integration uses a separately supplied General Instinct InstinctSAM
+container. Its application, weights and engines are excluded; read
+[THIRD_PARTY.md](THIRD_PARTY.md) before deployment.
 
-## Setup
+## CPU development checks
 
-```bash
-module load python/3.12.5 cuda/12.6.1
-python -m venv .venv
-source .venv/bin/activate
-python -m pip install -U pip
-python -m pip install torch==2.10.0 torchvision \
-  --index-url https://download.pytorch.org/whl/cu128
-python -m pip install -e external/sam3 -e .
-python -m pip install -r requirements-pace.txt
-```
-
-## Baseline submission
+Use Python 3.12+ with a compatible CPU PyTorch installation:
 
 ```bash
-MANIFEST=/storage/project/r-agarg35-0/eliu354/projects/efficientsam3-benchmark/data/manifests/sav_val_fixed3.jsonl \
-DATA_ROOT=/storage/project/r-agarg35-0/eliu354/projects/efficientsam3-benchmark \
-sbatch jobs/pace_baseline.sbatch
+python -m pip install -e '.[test]'
+python -m pytest tests
+bash scripts/dev/run_pace_thor_pipeline_smoke.sh
 ```
 
-Every precision candidate must report absolute task mIoU, relative mIoU
-retention, model latency, effective FPS, GPU type, and peak CUDA memory.
+The synthetic smoke checks detection-to-box handoff and metric reporting.
+It does not start a container or validate ROS, camera, engines or model accuracy.
 
-TensorRT engines must be rebuilt on the deployment GPU. PACE engines are
-benchmark artifacts and must not be copied to Jetson Thor.
+## Export and benchmark
 
-## Jetson Thor pipelines
+The recorded native baseline uses SAM3 source commit
+`46957e47805eaa273f4aa7bbbd25a88bca9108ce` and
+`facebook/sam3.1/sam3.1_multiplex.pt`
+(SHA256 `0567debeec80ba4ac6369540c6c248025283cb3ff2b92827509e57e2b3541cb6`).
+Install that upstream source and the CUDA dependencies for your target runtime;
+`requirements-pace.txt` describes the PACE experiment environment.
 
-The repository also provides two ROS 2 integrations:
+Start with the [script guide](scripts/README.md). Compare each precision candidate
+with the matching BF16 baseline using absolute task mIoU, relative retention,
+latency, effective FPS, GPU type and peak memory. The 90% mIoU-retention threshold
+is an acceptance target, not a claim that every candidate has passed.
 
-- General Instinct InstinctSAM native text/geometry tracking.
-- First-frame InstinctSAM text detection followed by optimized TV5M FP16 SAM2
-  TensorRT tracking.
+TensorRT plans must be rebuilt on the deployment GPU. Server-side engines and
+timings do not establish Thor compatibility or performance.
 
-The unified Thor viewer switches between them with `1` and `2`; the camera and
-models remain resident so switching does not require reloading an engine.
+## Deploy on Thor
 
-General Instinct's container, weights, engines, and application are licensed
-and supplied separately. They are intentionally excluded from this repository.
-Read [THIRD_PARTY.md](THIRD_PARTY.md) and
-[docs/thor_deployment.md](docs/thor_deployment.md) before deployment.
+Follow the [deployment guide](docs/thor_deployment.md) and
+[runtime architecture](docs/architecture.md). Mode 1 tracks in the InstinctSAM
+container; Mode 2 uses its initial text detections to initialize the companion
+[SAM2 TensorRT tracker](https://github.com/thedannyliu/Efficient-SAM2-TensorRT).
+The unified viewer switches modes with `1` and `2`.
 
-Thor performance claims require a completed
-[baseline record](docs/benchmarks/thor_baseline.md). Raw traces stay under the
-ignored `results/` directory, while lightweight summaries and each optimization
-delta are committed.
+Record a [Thor baseline](docs/benchmarks/thor_baseline.md) before claiming a
+performance improvement. Keep generated checkpoints, ONNX files, plans, raw
+traces and logs in ignored artifact directories.

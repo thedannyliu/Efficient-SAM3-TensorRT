@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 GI_DELIVERY_DIR="${GI_DELIVERY_DIR:-$HOME/vendor/general-instinct/InstinctSAM-Thor-delivery}"
 IMAGE="${GI_IMAGE:-instinctsam:thor-r39}"
 NAME="${GI_CONTAINER_NAME:-instinctsam-native}"
 SOURCE="${GI_CAMERA_DEVICE:-/dev/video4}"
 PORT="${GI_PORT:-8767}"
 
-python3 "$REPO_ROOT/scripts/verify_gi_delivery.py" "$GI_DELIVERY_DIR" --skip-tar
+python3 "$REPO_ROOT/scripts/thor/verify_gi_delivery.py" "$GI_DELIVERY_DIR" --skip-tar
 test -c "$SOURCE" || { echo "camera device is not a character device: $SOURCE" >&2; exit 1; }
 docker rm -f "$NAME" >/dev/null 2>&1 || true
 docker run -d --name "$NAME" \

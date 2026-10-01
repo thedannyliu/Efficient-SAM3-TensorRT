@@ -10,7 +10,6 @@ from pathlib import Path
 import cv2
 import numpy as np
 import onnx
-from modelopt.onnx.quantization import quantize
 
 
 class CalibrationReader:
@@ -114,6 +113,7 @@ def calibration_samples(
 
 def main() -> None:
     args = parse_args()
+    from modelopt.onnx.quantization import quantize
     model = onnx.load(args.onnx, load_external_data=False)
     input_type = model.graph.input[0].type.tensor_type.elem_type
     calibration_dtype = {

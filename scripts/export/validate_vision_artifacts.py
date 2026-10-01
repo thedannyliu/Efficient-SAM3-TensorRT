@@ -8,7 +8,6 @@ from time import perf_counter
 
 import cv2
 import numpy as np
-import onnxruntime as ort
 import torch
 
 from sam31_trt.runtime import TensorRTVisionTrunk
@@ -61,6 +60,7 @@ def load_normalized_image(path: Path) -> np.ndarray:
 
 def main() -> None:
     args = parse_args()
+    import onnxruntime as ort
     reference = torch.load(args.reference, map_location="cpu", weights_only=True)
     image = (
         load_normalized_image(args.image)

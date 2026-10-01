@@ -35,7 +35,7 @@ if [[ -n "${MAX_AUX_STREAMS:-}" ]]; then
 fi
 
 nvidia-smi
-python scripts/build_benchmark_engine.py \
+python scripts/benchmark/build_benchmark_engine.py \
   --onnx "${onnx_path}" \
   --engine "${run_dir}/vision_trunk.engine" \
   --reference "${reference_path}" \

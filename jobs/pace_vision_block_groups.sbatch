@@ -35,7 +35,7 @@ if [[ "${DISABLE_MHA_QDQ:-0}" == "1" ]]; then
 fi
 
 nvidia-smi
-python scripts/quantize_vision_onnx.py \
+python scripts/export/quantize_vision_onnx.py \
   --onnx "${source_dir}/vision_trunk.onnx" \
   --output "${run_dir}/vision_trunk.fp8.onnx" \
   --report "${run_dir}/quantization.json" \
@@ -48,7 +48,7 @@ python scripts/quantize_vision_onnx.py \
   --scope-regex "${scope_regex}" \
   "${quantization_args[@]}"
 
-python scripts/build_benchmark_engine.py \
+python scripts/benchmark/build_benchmark_engine.py \
   --onnx "${run_dir}/vision_trunk.fp8.onnx" \
   --engine "${run_dir}/vision_trunk.fp8.engine" \
   --reference "${source_dir}/reference.pt" \

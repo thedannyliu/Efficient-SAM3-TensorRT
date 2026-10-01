@@ -36,7 +36,7 @@ if [[ "${FP32_RESIDUALS:-0}" == "1" ]]; then
 fi
 
 nvidia-smi
-python scripts/export_vision_trunk.py \
+python scripts/export/export_vision_trunk.py \
   --checkpoint "${CHECKPOINT:-checkpoints/sam3.1_multiplex.pt}" \
   --sam3-repo external/sam3 \
   --precision "${precision}" \
@@ -48,7 +48,7 @@ if [[ "${EXPORT_ONLY:-0}" == "1" ]]; then
   exit 0
 fi
 
-python scripts/build_benchmark_engine.py \
+python scripts/benchmark/build_benchmark_engine.py \
   --onnx "${run_dir}/vision_trunk.onnx" \
   --engine "${run_dir}/vision_trunk.engine" \
   --reference "${run_dir}/reference.pt" \

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 EXPECTED_ACK="research-evaluation-only"
 if [[ "${GI_RESEARCH_USE_ACK:-}" != "$EXPECTED_ACK" ]]; then
   echo "Unified camera switching requires GI_RESEARCH_USE_ACK=$EXPECTED_ACK" >&2
@@ -49,5 +49,5 @@ if [[ -n "$RUNTIME_VALUE" ]]; then
   export XDG_RUNTIME_DIR="$RUNTIME_VALUE"
 fi
 
-source "$REPO_ROOT/scripts/source_thor_ros_env.sh"
+source "$REPO_ROOT/scripts/thor/source_thor_ros_env.sh"
 exec ros2 launch sam3_trt_ros unified.launch.py "$@"
