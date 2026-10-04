@@ -2,7 +2,7 @@ import unittest
 
 import torch
 
-from scripts.export_vision_trunk import (
+from scripts.export.export_vision_trunk import (
     FP32Block,
     FP32ResidualBlock,
     configure_fp32_layer_norms,

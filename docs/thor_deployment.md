@@ -54,7 +54,7 @@ shell:
 
 ```bash
 export GI_RESEARCH_USE_ACK=research-evaluation-only
-python3 scripts/verify_gi_delivery.py \
+python3 scripts/thor/verify_gi_delivery.py \
   ~/vendor/general-instinct/InstinctSAM-Thor-delivery
 ```
 
@@ -62,7 +62,7 @@ python3 scripts/verify_gi_delivery.py \
 
 ```bash
 export GI_RESEARCH_USE_ACK=research-evaluation-only
-bash scripts/thor_load_gi_image.sh
+bash scripts/thor/thor_load_gi_image.sh
 docker image inspect instinctsam:thor-r39
 ```
 
@@ -78,13 +78,13 @@ The existing SAM2 workspace must already be built.
 ```bash
 cd ~/Efficient-SAM3-TensorRT
 export SAM2_ROOT=~/Efficient-SAM2-TensorRT
-bash scripts/setup_thor_ros.sh
+bash scripts/thor/setup_thor_ros.sh
 ```
 
 Every new terminal uses:
 
 ```bash
-source ~/Efficient-SAM3-TensorRT/scripts/source_thor_ros_env.sh
+source ~/Efficient-SAM3-TensorRT/scripts/thor/source_thor_ros_env.sh
 ```
 
 ## 5. Discover and lock the D455 profile
@@ -118,14 +118,14 @@ Stop the ROS RealSense node so the container can own `/dev/video4`, then run:
 cd ~/Efficient-SAM3-TensorRT
 export GI_RESEARCH_USE_ACK=research-evaluation-only
 export GI_CAMERA_DEVICE=/dev/video4
-bash scripts/thor_run_gi_native.sh
+bash scripts/thor/thor_run_gi_native.sh
 curl -s http://127.0.0.1:8767/status.json
 ```
 
 Launch the ROS adapter and viewer on the Thor desktop:
 
 ```bash
-source ~/Efficient-SAM3-TensorRT/scripts/source_thor_ros_env.sh
+source ~/Efficient-SAM3-TensorRT/scripts/thor/source_thor_ros_env.sh
 export DISPLAY=:0
 ros2 launch sam3_trt_ros instinctsam_native.launch.py
 ```
@@ -154,7 +154,7 @@ Stop the unmodified container and start the unified image:
 docker rm -f instinctsam-native 2>/dev/null || true
 cd ~/Efficient-SAM3-TensorRT
 export GI_RESEARCH_USE_ACK=research-evaluation-only
-bash scripts/thor_run_gi_unified.sh
+bash scripts/thor/thor_run_gi_unified.sh
 ```
 
 The GI container remains the sole owner of `/dev/video4`. Switching routes does
@@ -162,14 +162,14 @@ not reopen the camera.
 
 ```bash
 cd ~/Efficient-SAM3-TensorRT
-bash scripts/thor_launch_unified_ui.sh
+bash scripts/thor/thor_launch_unified_ui.sh
 ```
 
 For normal use, including after a Thor reboot, use the idempotent desktop
 restart command:
 
 ```bash
-cd ~/Efficient-SAM3-TensorRT && GI_RESEARCH_USE_ACK=research-evaluation-only bash scripts/thor_restart_unified_desktop.sh
+cd ~/Efficient-SAM3-TensorRT && GI_RESEARCH_USE_ACK=research-evaluation-only bash scripts/thor/thor_restart_unified_desktop.sh
 ```
 
 The command stops any previous unified ROS launch, clears its shared-frame
@@ -215,14 +215,14 @@ cd ~/Efficient-SAM3-TensorRT
 git pull --ff-only
 ```
 
-Run `bash scripts/setup_thor_ros.sh` after pulled ROS source changes. Script or
+Run `bash scripts/thor/setup_thor_ros.sh` after pulled ROS source changes. Script or
 documentation-only updates do not need a ROS rebuild.
 
 Stop the complete ROS launch before rebuilding or starting another copy:
 
 ```bash
 cd ~/Efficient-SAM3-TensorRT
-bash scripts/thor_stop_unified_desktop.sh
+bash scripts/thor/thor_stop_unified_desktop.sh
 ```
 
 The start script refuses to create a second unified launch. This avoids two
@@ -240,7 +240,7 @@ The interactive defaults use four concurrent object contexts, synchronous
 tracking, synchronized previews, and no adaptive display throttling:
 
 ```bash
-bash scripts/thor_start_unified_desktop.sh \
+bash scripts/thor/thor_start_unified_desktop.sh \
   track_concurrency:=4 pipeline_overlap:=false \
   smooth_camera_view:=false adaptive_display_fps:=false
 ```
@@ -255,7 +255,7 @@ throughput-oriented one-object benchmark.
 TensorRT object batching is a separate experimental switch:
 
 ```bash
-bash scripts/thor_start_unified_desktop.sh \
+bash scripts/thor/thor_start_unified_desktop.sh \
   track_bucket_size:=2 track_bucket_min_objects:=4
 ```
 
@@ -480,9 +480,9 @@ until the baseline is complete. With the selected pipeline already running:
 
 ```bash
 cd ~/Efficient-SAM3-TensorRT
-bash scripts/record_thor_baseline.sh instinctsam
+bash scripts/thor/record_thor_baseline.sh instinctsam
 # or
-bash scripts/record_thor_baseline.sh hybrid
+bash scripts/thor/record_thor_baseline.sh hybrid
 ```
 
 Each command records 100 warm-up frames plus 1,000 measured frames, repeated

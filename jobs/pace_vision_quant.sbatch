@@ -31,7 +31,7 @@ if [[ "${DISABLE_MHA_QDQ:-0}" == "1" ]]; then
 fi
 
 nvidia-smi
-python scripts/quantize_vision_onnx.py \
+python scripts/export/quantize_vision_onnx.py \
   --onnx "${source_dir}/vision_trunk.onnx" \
   --output "${run_dir}/vision_trunk.${mode}.onnx" \
   --report "${run_dir}/quantization.json" \
@@ -43,7 +43,7 @@ python scripts/quantize_vision_onnx.py \
   --mha-accumulation-dtype "${MHA_ACCUMULATION_DTYPE:-fp16}" \
   "${scope_args[@]}"
 
-python scripts/build_benchmark_engine.py \
+python scripts/benchmark/build_benchmark_engine.py \
   --onnx "${run_dir}/vision_trunk.${mode}.onnx" \
   --engine "${run_dir}/vision_trunk.${mode}.engine" \
   --reference "${source_dir}/reference.pt" \

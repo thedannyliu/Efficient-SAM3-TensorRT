@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SAM2_ROOT="${SAM2_ROOT:-$HOME/Efficient-SAM2-TensorRT}"
 THOR_VENV="${THOR_VENV:-$HOME/venvs/efficient_sam3_trt_ros}"
 

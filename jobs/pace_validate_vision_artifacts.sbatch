@@ -26,7 +26,7 @@ if [[ -n "${IMAGE:-}" ]]; then
 fi
 
 nvidia-smi
-python scripts/validate_vision_artifacts.py \
+python scripts/export/validate_vision_artifacts.py \
   --onnx "${source_dir}/vision_trunk.onnx" \
   --engine "${source_dir}/vision_trunk.engine" \
   --reference "${source_dir}/reference.pt" \

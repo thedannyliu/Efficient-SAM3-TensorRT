@@ -23,7 +23,7 @@ run_dir="results/${SLURM_ARRAY_JOB_ID}_${SLURM_ARRAY_TASK_ID}/block_${block}"
 mkdir -p "${run_dir}" logs
 
 nvidia-smi
-python scripts/export_vision_block.py \
+python scripts/export/export_vision_block.py \
   --checkpoint "${CHECKPOINT:-checkpoints/sam3.1_multiplex.pt}" \
   --sam3-repo external/sam3 \
   --image "${IMAGE:?set IMAGE to a representative frame}" \
@@ -31,7 +31,7 @@ python scripts/export_vision_block.py \
   --onnx "${run_dir}/block.onnx" \
   --reference "${run_dir}/reference.pt"
 
-python scripts/build_benchmark_engine.py \
+python scripts/benchmark/build_benchmark_engine.py \
   --onnx "${run_dir}/block.onnx" \
   --engine "${run_dir}/block.engine" \
   --reference "${run_dir}/reference.pt" \

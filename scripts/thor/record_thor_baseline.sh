@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 PIPELINE="${1:?usage: record_thor_baseline.sh instinctsam|hybrid [experiment-id]}"
 EXPERIMENT_ID="${2:-$(date -u +%Y%m%dT%H%M%SZ)_${PIPELINE}}"
 case "$PIPELINE" in
@@ -10,7 +10,7 @@ case "$PIPELINE" in
   *) echo "pipeline must be instinctsam or hybrid" >&2; exit 2 ;;
 esac
 
-source "$REPO_ROOT/scripts/source_thor_ros_env.sh"
+source "$REPO_ROOT/scripts/thor/source_thor_ros_env.sh"
 OUTPUT_DIR="$REPO_ROOT/results/benchmarks/$EXPERIMENT_ID"
 mkdir -p "$OUTPUT_DIR"
 

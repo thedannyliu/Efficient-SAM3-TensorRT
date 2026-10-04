@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 EXPECTED_ACK="research-evaluation-only"
 LOG="${THOR_UNIFIED_LOG:-/tmp/efficient-sam3-unified.log}"
 PORT="${GI_PORT:-8767}"
@@ -91,11 +91,11 @@ else
   echo "Preflight: camera found; cold GI loading can take about 2 minutes"
 fi
 
-bash "$REPO_ROOT/scripts/thor_stop_unified_desktop.sh"
+bash "$REPO_ROOT/scripts/thor/thor_stop_unified_desktop.sh"
 rm -f /dev/shm/sam3_sam2_frame.bin
 
 echo "Starting the ROS viewer and both model runtimes"
-nohup bash "$REPO_ROOT/scripts/thor_start_unified_desktop.sh" "$@" \
+nohup bash "$REPO_ROOT/scripts/thor/thor_start_unified_desktop.sh" "$@" \
   >"$LOG" 2>&1 </dev/null &
 launcher_pid=$!
 

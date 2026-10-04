@@ -3,18 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-import tensorrt as trt
 import torch
 
 
-TRT_TO_TORCH = {
-    trt.float16: torch.float16,
-    trt.float32: torch.float32,
-    trt.bfloat16: torch.bfloat16,
-    trt.int32: torch.int32,
-    trt.int64: torch.int64,
-    trt.bool: torch.bool,
-}
 
 
 class TensorRTVisionTrunk(torch.nn.Module):
@@ -22,6 +13,17 @@ class TensorRTVisionTrunk(torch.nn.Module):
 
     def __init__(self, engine_path: Path) -> None:
         super().__init__()
+        import tensorrt as trt
+
+        trt_to_torch = {
+            trt.float16: torch.float16,
+            trt.float32: torch.float32,
+            trt.bfloat16: torch.bfloat16,
+            trt.int32: torch.int32,
+            trt.int64: torch.int64,
+            trt.bool: torch.bool,
+        }
+
         logger = trt.Logger(trt.Logger.WARNING)
         self.runtime = trt.Runtime(logger)
         self.engine = self.runtime.deserialize_cuda_engine(engine_path.read_bytes())
@@ -42,8 +44,8 @@ class TensorRTVisionTrunk(torch.nn.Module):
             )
         self.input_name = inputs[0]
         self.output_name = outputs[0]
-        self.input_dtype = TRT_TO_TORCH[self.engine.get_tensor_dtype(self.input_name)]
-        self.output_dtype = TRT_TO_TORCH[self.engine.get_tensor_dtype(self.output_name)]
+        self.input_dtype = trt_to_torch[self.engine.get_tensor_dtype(self.input_name)]
+        self.output_dtype = trt_to_torch[self.engine.get_tensor_dtype(self.output_name)]
         self.channel_list = [1024]
         self._output: torch.Tensor | None = None
 

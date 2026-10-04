@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 GI_DELIVERY_DIR="${GI_DELIVERY_DIR:-$HOME/vendor/general-instinct/InstinctSAM-Thor-delivery}"
 IMAGE="${GI_DETECT_IMAGE:-instinctsam:thor-r39-detect-api}"
 NAME="${GI_CONTAINER_NAME:-instinctsam-detect}"
 PORT="${GI_PORT:-8767}"
 
-python3 "$REPO_ROOT/scripts/verify_gi_delivery.py" "$GI_DELIVERY_DIR" --skip-tar
+python3 "$REPO_ROOT/scripts/thor/verify_gi_delivery.py" "$GI_DELIVERY_DIR" --skip-tar
 docker image inspect "$IMAGE" >/dev/null
 docker rm -f "$NAME" >/dev/null 2>&1 || true
 docker run -d --name "$NAME" \

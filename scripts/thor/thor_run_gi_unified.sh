@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 GI_DELIVERY_DIR="${GI_DELIVERY_DIR:-$HOME/vendor/general-instinct/InstinctSAM-Thor-delivery}"
 IMAGE="${GI_UNIFIED_IMAGE:-instinctsam:thor-r39-unified-api}"
 NAME="${GI_CONTAINER_NAME:-instinctsam-unified}"
 PORT="${GI_PORT:-8767}"
 
-python3 "$REPO_ROOT/scripts/verify_gi_delivery.py" "$GI_DELIVERY_DIR" --skip-tar
+python3 "$REPO_ROOT/scripts/thor/verify_gi_delivery.py" "$GI_DELIVERY_DIR" --skip-tar
 CAMERA_WAIT_SECONDS="${GI_CAMERA_WAIT_SECONDS:-120}"
 HOST_SOURCE=""
 for ((second = 0; second < CAMERA_WAIT_SECONDS; second++)); do
@@ -59,7 +59,7 @@ docker run -d --name "$NAME" \
 for _ in $(seq 1 150); do
   if curl -fsS --max-time 2 \
     "http://127.0.0.1:$PORT/status.json" >/dev/null 2>&1; then
-    PYTHONPATH="$REPO_ROOT/src" python3 "$REPO_ROOT/scripts/warm_gi.py" \
+    PYTHONPATH="$REPO_ROOT/src" python3 "$REPO_ROOT/scripts/thor/warm_gi.py" \
       --base-url "http://127.0.0.1:$PORT" || \
       echo "InstinctSAM warm-up failed; the first prompt will warm it"
     echo "InstinctSAM unified API ready on http://127.0.0.1:$PORT"
